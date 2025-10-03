@@ -1,0 +1,7 @@
+{
+  "name": "ASRANI Expenses",
+  "description": "A modern, AI-powered expense tracking application to manage your finances. Scan receipts, set budgets, and visualize your spending with elegant charts.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

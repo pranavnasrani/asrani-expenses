@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "423024582059",
+    "project_id": "asrani-expenses",
+    "storage_bucket": "asrani-expenses.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:423024582059:android:febf7ef99a8c0f73e746ee",
+        "android_client_info": {
+          "package_name": "com.example.myapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "423024582059-8buucbs9j9nttes047f8tostbrpobdvt.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuPsJF4WqB_EvVhvOEsZqYzszIi71jV0g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "423024582059-8buucbs9j9nttes047f8tostbrpobdvt.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "423024582059-58golj4v958c0gfierouqbbf2jf68vb9.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.asrani.expenses"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -65,8 +65,8 @@ coverage/
 
 # Firebase
 .firebase/
-google-services.json
-GoogleService-Info.plist
+# google-services.json
+# GoogleService-Info.plist
 
 # Env
 .env*

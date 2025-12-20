@@ -99,10 +99,12 @@ class _ChartsScreenState extends State<ChartsScreen> {
                     )
                     .snapshots(),
                 builder: (context, snapshot) {
-                  if (snapshot.hasError)
+                  if (snapshot.hasError) {
                     return const Center(child: Text('Error loading data'));
-                  if (snapshot.connectionState == ConnectionState.waiting)
+                  }
+                  if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
+                  }
 
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                     return const Center(child: Text('No expenses this month'));
@@ -131,8 +133,9 @@ class _ChartsScreenState extends State<ChartsScreen> {
                     total += amount;
                   }
 
-                  if (total == 0)
+                  if (total == 0) {
                     return const Center(child: Text('No spending to show'));
+                  }
 
                   // Create Pie Sections
                   int colorIndex = 0;
@@ -228,8 +231,9 @@ class _ChartsScreenState extends State<ChartsScreen> {
                   }
 
                   final data = snapshot.data ?? {};
-                  if (data.isEmpty)
+                  if (data.isEmpty) {
                     return const Center(child: Text('No history available'));
+                  }
 
                   // Prepare Bar Groups
                   List<BarChartGroupData> barGroups = [];
@@ -286,8 +290,9 @@ class _ChartsScreenState extends State<ChartsScreen> {
                             getTitlesWidget: (value, meta) {
                               final index = value.toInt(); // 0 to 5
                               // 0 is oldest (5 months ago), 5 is newest (current month)
-                              if (index < 0 || index > 5)
+                              if (index < 0 || index > 5) {
                                 return const SizedBox.shrink();
+                              }
                               final date = DateTime(
                                 now.year,
                                 now.month - (5 - index),
@@ -353,7 +358,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
           continue; // Skip this entry if date format is unknown
         }
       } catch (e) {
-        print('Error parsing date in charts: $e');
+        debugPrint('Error parsing date in charts: $e');
         continue; // Skip this entry if date parsing fails
       }
 

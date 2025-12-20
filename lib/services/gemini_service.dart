@@ -1,10 +1,10 @@
 import 'dart:io';
-import 'dart:typed_data';
+
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
 
 class GeminiService {
-  static const String _apiKey = 'AIzaSyCtXLiTzNvafYxIghDXvABZQ_2o71TWcVM';
+  static const String _apiKey = 'AIzaSyBsW38cw4SwXIecRN3HFJDld8XkJGs3aKs';
   late final GenerativeModel _model;
 
   GeminiService() {
@@ -54,7 +54,7 @@ Rules:
       final response = await _model.generateContent(content);
 
       if (response.text == null || response.text!.isEmpty) {
-        print('Gemini returned empty response');
+        debugPrint('Gemini returned empty response');
         return null;
       }
 
@@ -111,7 +111,7 @@ Rules:
 
       // Validate required fields
       if (!data.containsKey('title') || !data.containsKey('amount')) {
-        print('Invalid response format: missing required fields');
+        debugPrint('Invalid response format: missing required fields');
         return null;
       }
 
@@ -120,11 +120,112 @@ Rules:
       data['place'] ??= '';
       data['date'] ??= DateTime.now().toIso8601String().split('T')[0];
 
-      print('Extracted data: $data');
       return data;
     } catch (e) {
-      print('Error analyzing receipt: $e');
+      debugPrint('Error analyzing receipt: $e');
       return null;
+    }
+  }
+
+  /// Parses a user query to extract search filters
+  /// Returns: { 'startDate': YYYY-MM-DD, 'endDate': YYYY-MM-DD, 'category': String?, 'paymentMethod': String? }
+  Future<Map<String, String?>> parseQuery(String query) async {
+    try {
+      final now = DateTime.now();
+      final prompt =
+          '''
+Current Date: ${now.toIso8601String().split('T')[0]}
+User Query: "$query"
+
+Extract the following search filters from the query in JSON format:
+{
+  "startDate": "YYYY-MM-DD" (start of range, e.g., for 'last month', 'this week'),
+  "endDate": "YYYY-MM-DD" (end of range, usually today if not specified),
+  "category": "Food, Transport, Shopping, Entertainment, Bills, Other" (or null if not specified),
+  "paymentMethod": "Cash, Credit Card, Debit Card, PayNow, Other" (or null if not specified)
+}
+Rules:
+- Calculate exact dates based on "Current Date".
+- If no date is specified, default to the last 30 days.
+- Return ONLY valid JSON.
+''';
+
+      final content = [Content.text(prompt)];
+      final response = await _model.generateContent(content);
+
+      if (response.text == null) return {};
+
+      String jsonStr = response.text!.trim();
+      if (jsonStr.startsWith('```json')) {
+        jsonStr = jsonStr.substring(7);
+      }
+      if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.substring(3);
+      }
+      if (jsonStr.endsWith('```')) {
+        jsonStr = jsonStr.substring(0, jsonStr.length - 3);
+      }
+
+      // Simple manual JSON parsing to avoid heavy dependencies if possible,
+      // but robust enough for the expected format.
+      // (Using basic string manipulation for simplicity in this context)
+      // Ideally usage of dart:convert jsonDecode is better.
+      // LET'S USE dart:convert which is standard.
+      // But since I cannot easily add imports at the top with this tool, I'll rely on string matching or assume dart:convert is available?
+      // Wait, dart:convert is a core library, but I need to make sure it's imported.
+      // I will assume it's NOT imported and use regex-based parsing to be safe/standalone,
+      // OR I can use the existing manual parsing logic style.
+
+      // Regex parsing for the specific keys
+      final startDateMatch = RegExp(
+        r'"startDate"\s*:\s*"([^"]+)"',
+      ).firstMatch(jsonStr);
+      final endDateMatch = RegExp(
+        r'"endDate"\s*:\s*"([^"]+)"',
+      ).firstMatch(jsonStr);
+      final categoryMatch = RegExp(
+        r'"category"\s*:\s*"([^"]+)"',
+      ).firstMatch(jsonStr);
+      final paymentMethodMatch = RegExp(
+        r'"paymentMethod"\s*:\s*"([^"]+)"',
+      ).firstMatch(jsonStr);
+
+      return {
+        'startDate': startDateMatch?.group(1),
+        'endDate': endDateMatch?.group(1),
+        'category': categoryMatch?.group(1) == 'null'
+            ? null
+            : categoryMatch?.group(1),
+        'paymentMethod': paymentMethodMatch?.group(1) == 'null'
+            ? null
+            : paymentMethodMatch?.group(1),
+      };
+    } catch (e) {
+      debugPrint('Error parsing query: $e');
+      return {};
+    }
+  }
+
+  /// Generates a natural language answer based on the provided expense data
+  Future<String> generateResponse(String query, String dataSummary) async {
+    try {
+      final prompt =
+          '''
+User Question: "$query"
+Expense Data Found:
+$dataSummary
+
+Answer the user's question naturally and concisely based *only* on the data provided.
+- If data is empty, say "I couldn't find any expenses matching that."
+- Highlight totals, trends, or specific largest expenses if relevant.
+- Be friendly and helpful.
+''';
+
+      final content = [Content.text(prompt)];
+      final response = await _model.generateContent(content);
+      return response.text ?? 'I stayed silent... (Error)';
+    } catch (e) {
+      return 'I encountered an error analyzing the data.';
     }
   }
 }

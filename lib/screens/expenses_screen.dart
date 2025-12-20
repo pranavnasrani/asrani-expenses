@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../utils/category_utils.dart';
+import 'chat_screen.dart';
 
 class ExpensesScreen extends StatefulWidget {
   const ExpensesScreen({super.key});
@@ -12,6 +14,14 @@ class ExpensesScreen extends StatefulWidget {
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
   final user = FirebaseAuth.instance.currentUser;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   Future<void> _deleteExpense(String id) async {
     if (user == null) return;
@@ -27,7 +37,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     if (user == null) return;
     final data = doc.data() as Map<String, dynamic>;
 
-    // Add null safety for all fields
     final titleController = TextEditingController(
       text: data['title']?.toString() ?? '',
     );
@@ -56,7 +65,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       'Other',
     ];
 
-    // Fetch user categories
     try {
       final catDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -70,7 +78,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         categories = List<String>.from(catDoc.data()!['list']);
       }
     } catch (e) {
-      print('Error fetching categories: $e');
+      debugPrint('Error fetching categories: $e');
     }
 
     if (!categories.contains(selectedCategory)) {
@@ -110,9 +118,22 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   DropdownButtonFormField<String>(
                     value: selectedCategory,
                     decoration: const InputDecoration(labelText: 'Category'),
-                    items: categories
-                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                        .toList(),
+                    items: categories.map((c) {
+                      return DropdownMenuItem(
+                        value: c,
+                        child: Row(
+                          children: [
+                            Icon(
+                              CategoryUtils.getIconForCategory(c),
+                              size: 18,
+                              color: CategoryUtils.getColorForCategory(c),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(c),
+                          ],
+                        ),
+                      );
+                    }).toList(),
                     onChanged: (value) {
                       setState(() {
                         selectedCategory = value!;
@@ -175,12 +196,122 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     );
   }
 
+  void _showReceiptPreview(String imageUrl, String title) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              constraints: const BoxConstraints(maxHeight: 600, maxWidth: 400),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppBar(
+                    title: Text(
+                      title,
+                      style: const TextStyle(fontSize: 16),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    leading: IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                  Flexible(
+                    child: InteractiveViewer(
+                      child: Image.network(
+                        imageUrl,
+                        fit: BoxFit.contain,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(40),
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(40),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.broken_image, size: 48),
+                                  SizedBox(height: 8),
+                                  Text('Could not load receipt'),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (user == null) return const Center(child: Text('Please log in'));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Expenses')),
+      appBar: AppBar(
+        title: const Text('Expenses'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search expenses, places...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+              onChanged: (value) {
+                setState(() => _searchQuery = value.toLowerCase());
+              },
+            ),
+          ),
+        ),
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
@@ -197,17 +328,61 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text('No expenses found'));
+          final allDocs = snapshot.data?.docs ?? [];
+          final filteredDocs = allDocs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final title = (data['title'] ?? '').toString().toLowerCase();
+            final place = (data['place'] ?? '').toString().toLowerCase();
+            final category = (data['category'] ?? '').toString().toLowerCase();
+
+            return title.contains(_searchQuery) ||
+                place.contains(_searchQuery) ||
+                category.contains(_searchQuery);
+          }).toList();
+
+          if (filteredDocs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.search_off, size: 64, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  Text(
+                    _searchQuery.isEmpty
+                        ? 'No expenses yet'
+                        : 'No results for "$_searchQuery"',
+                    style: const TextStyle(color: Colors.grey, fontSize: 16),
+                  ),
+                  if (_searchQuery.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.auto_awesome),
+                      label: const Text('Search with AI'),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ChatScreen(
+                              initialQuery:
+                                  'Find expenses related to "$_searchQuery"',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            );
           }
 
           return ListView.builder(
-            itemCount: snapshot.data!.docs.length,
+            padding: const EdgeInsets.all(16),
+            itemCount: filteredDocs.length,
             itemBuilder: (context, index) {
-              final doc = snapshot.data!.docs[index];
+              final doc = filteredDocs[index];
               final data = doc.data() as Map<String, dynamic>;
 
-              // Handle both Timestamp and String date formats
               String date;
               try {
                 if (data['date'] is Timestamp) {
@@ -215,7 +390,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     'MMM d, yyyy',
                   ).format((data['date'] as Timestamp).toDate());
                 } else if (data['date'] is String) {
-                  // Parse string date and format it
                   final parsedDate = DateTime.parse(data['date'] as String);
                   date = DateFormat('MMM d, yyyy').format(parsedDate);
                 } else {
@@ -223,71 +397,192 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 }
               } catch (e) {
                 date = 'Invalid date';
-                print('Error parsing date: $e');
               }
               final category = data['category'] ?? 'Other';
               final place = data['place'] ?? '';
-
-              // Add null safety for all fields
               final title = data['title']?.toString() ?? 'Untitled';
               final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
               final imageUrl = data['imageUrl']?.toString();
 
               return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (imageUrl != null && imageUrl.isNotEmpty)
-                      SizedBox(
-                        height: 200,
-                        width: double.infinity,
-                        child: Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey[300],
-                              child: const Icon(Icons.broken_image, size: 50),
-                            );
-                          },
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12),
+                        ),
+                        child: SizedBox(
+                          height: 200,
+                          width: double.infinity,
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey[300],
+                                child: const Icon(Icons.broken_image, size: 50),
+                              );
+                            },
+                          ),
                         ),
                       ),
-                    ListTile(
-                      leading: CircleAvatar(
-                        child: Text(
-                          title.isNotEmpty ? title[0].toUpperCase() : '?',
-                        ),
-                      ),
-                      title: Text(title),
-                      subtitle: Column(
+                    Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('$date • $category'),
-                          if (place.isNotEmpty)
-                            Text(
-                              '📍 $place',
-                              style: const TextStyle(fontSize: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '\$${amount.toStringAsFixed(2)}',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context).primaryColor,
+                                    ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.calendar_today,
+                                size: 14,
+                                color: Colors.grey[600],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                date,
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: CategoryUtils.getColorForCategory(
+                                    category,
+                                  ).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: CategoryUtils.getColorForCategory(
+                                      category,
+                                    ).withValues(alpha: 0.2),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      CategoryUtils.getIconForCategory(
+                                        category,
+                                      ),
+                                      size: 14,
+                                      color: CategoryUtils.getColorForCategory(
+                                        category,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      category,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color:
+                                            CategoryUtils.getColorForCategory(
+                                              category,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (place.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  size: 14,
+                                  color: Colors.grey[600],
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    place,
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 14,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
+                          ],
                         ],
                       ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
+                    ),
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                        vertical: 4.0,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          Text(
-                            '\$${amount.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.blue),
+                          TextButton.icon(
+                            icon: const Icon(Icons.edit, size: 18),
+                            label: const Text('Edit'),
                             onPressed: () => _showEditDialog(doc),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
+                          const SizedBox(width: 8),
+                          TextButton.icon(
+                            icon: const Icon(
+                              Icons.delete,
+                              size: 18,
+                              color: Colors.red,
+                            ),
+                            label: const Text(
+                              'Delete',
+                              style: TextStyle(color: Colors.red),
+                            ),
                             onPressed: () => _deleteExpense(doc.id),
                           ),
+                          if (imageUrl != null && imageUrl.isNotEmpty) ...[
+                            const SizedBox(width: 8),
+                            TextButton.icon(
+                              icon: const Icon(Icons.receipt, size: 18),
+                              label: const Text('Receipt'),
+                              onPressed: () =>
+                                  _showReceiptPreview(imageUrl, title),
+                            ),
+                          ],
                         ],
                       ),
                     ),

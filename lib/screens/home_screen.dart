@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import '../utils/category_utils.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onNavigateToAdd;
+  final VoidCallback onNavigateToExpenses;
 
-  const HomeScreen({super.key, required this.onNavigateToAdd});
+  const HomeScreen({
+    super.key,
+    required this.onNavigateToAdd,
+    required this.onNavigateToExpenses,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +31,7 @@ class HomeScreen extends StatelessWidget {
           _buildQuickActions(context),
           const SizedBox(height: 24),
 
-          // Monthly Summary
+          // Monthly Summary & Dashboard
           _buildMonthlySummary(context, user),
           const SizedBox(height: 24),
 
@@ -50,11 +56,16 @@ class HomeScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(greeting, style: Theme.of(context).textTheme.headlineMedium),
-        const SizedBox(height: 4),
         Text(
-          user?.displayName ?? user?.email ?? 'User',
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+          '$greeting,',
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(color: Colors.grey[600]),
+        ),
+        Text(
+          user?.displayName ?? user?.email?.split('@')[0] ?? 'User',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
             color: Theme.of(context).colorScheme.primary,
           ),
         ),
@@ -68,40 +79,45 @@ class HomeScreen extends StatelessWidget {
       children: [
         Text('Quick Actions', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildActionCard(
-                context,
-                icon: Icons.receipt_long,
-                title: 'Scan Receipt',
-                subtitle: 'AI-powered extraction',
-                gradient: LinearGradient(
-                  colors: [
-                    Theme.of(context).colorScheme.primary,
-                    Theme.of(context).colorScheme.secondary,
-                  ],
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: _buildActionCard(
+                  context,
+                  icon: Icons.receipt_long,
+                  title: 'Scan Receipt',
+                  subtitle: 'AI-powered extraction',
+                  gradient: LinearGradient(
+                    colors: [
+                      Theme.of(context).colorScheme.primary,
+                      Theme.of(context).colorScheme.secondary,
+                    ],
+                  ),
+                  onTap: onNavigateToAdd,
                 ),
-                onTap: onNavigateToAdd,
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildActionCard(
-                context,
-                icon: Icons.edit,
-                title: 'Add Manually',
-                subtitle: 'Quick entry',
-                gradient: LinearGradient(
-                  colors: [
-                    Theme.of(context).colorScheme.secondary,
-                    Theme.of(context).colorScheme.primary.withOpacity(0.7),
-                  ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildActionCard(
+                  context,
+                  icon: Icons.edit,
+                  title: 'Add Manually',
+                  subtitle: 'Quick entry',
+                  gradient: LinearGradient(
+                    colors: [
+                      Theme.of(context).colorScheme.secondary,
+                      Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.7),
+                    ],
+                  ),
+                  onTap: onNavigateToAdd,
                 ),
-                onTap: onNavigateToAdd,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
@@ -125,7 +141,9 @@ class HomeScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+              color: Theme.of(
+                context,
+              ).colorScheme.primary.withValues(alpha: 0.2),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -134,7 +152,7 @@ class HomeScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: Colors.white, size: 32),
+            Icon(icon, color: Colors.white, size: 28),
             const SizedBox(height: 12),
             Text(
               title,
@@ -148,7 +166,7 @@ class HomeScreen extends StatelessWidget {
             Text(
               subtitle,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.9),
+                color: Colors.white.withValues(alpha: 0.9),
                 fontSize: 12,
               ),
             ),
@@ -161,112 +179,184 @@ class HomeScreen extends StatelessWidget {
   Widget _buildMonthlySummary(BuildContext context, User? user) {
     if (user == null) return const SizedBox.shrink();
 
-    final now = DateTime.now();
-    final startOfMonth = DateTime(now.year, now.month, 1);
-    final endOfMonth = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
-
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('expenses')
-          .where(
-            'date',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(startOfMonth),
-          )
-          .where('date', isLessThanOrEqualTo: Timestamp.fromDate(endOfMonth))
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Card(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          );
-        }
+        if (!snapshot.hasData) return const SizedBox.shrink();
 
-        double total = 0;
-        int count = snapshot.data!.docs.length;
+        final now = DateTime.now();
+        final startOfMonth = DateTime(now.year, now.month, 1);
+        final last7Days = List.generate(7, (index) {
+          return DateTime.now().subtract(Duration(days: 6 - index));
+        });
+
+        double monthTotal = 0;
+        double cashTotal = 0;
+        double cardTotal = 0;
+        Map<int, double> dailySpending = {for (var i = 0; i < 7; i++) i: 0.0};
 
         for (var doc in snapshot.data!.docs) {
           final data = doc.data() as Map<String, dynamic>;
-          total += (data['amount'] as num?)?.toDouble() ?? 0.0;
+          final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
+          final date = data['date'] != null
+              ? (data['date'] as Timestamp).toDate()
+              : DateTime.now();
+          final method = data['paymentMethod']?.toString().toLowerCase() ?? '';
+
+          if (date.isAfter(startOfMonth)) {
+            monthTotal += amount;
+            if (method == 'cash') {
+              cashTotal += amount;
+            } else if (method.contains('card')) {
+              cardTotal += amount;
+            }
+          }
+
+          for (var i = 0; i < 7; i++) {
+            if (date.year == last7Days[i].year &&
+                date.month == last7Days[i].month &&
+                date.day == last7Days[i].day) {
+              dailySpending[i] = (dailySpending[i] ?? 0) + amount;
+            }
+          }
         }
 
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_month,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      DateFormat('MMMM yyyy').format(now),
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildSummaryItem(
-                      context,
-                      label: 'Total Spent',
-                      value: '\$${total.toStringAsFixed(2)}',
-                      icon: Icons.attach_money,
-                    ),
-                    _buildSummaryItem(
-                      context,
-                      label: 'Transactions',
-                      value: count.toString(),
-                      icon: Icons.receipt,
-                    ),
-                  ],
-                ),
-              ],
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Spending Summary',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-          ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.1)
+                      : Colors.grey.withValues(alpha: 0.2),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Total Spent this month',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            '\$${monthTotal.toStringAsFixed(2)}',
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                          ),
+                        ],
+                      ),
+                      Icon(
+                        Icons.trending_up,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  // Simple Bar Chart
+                  SizedBox(
+                    height: 100,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: List.generate(7, (index) {
+                        final spending = dailySpending[index] ?? 0.0;
+                        final maxSpending = dailySpending.values.isEmpty
+                            ? 1.0
+                            : dailySpending.values
+                                  .reduce((a, b) => a > b ? a : b)
+                                  .clamp(1.0, double.infinity);
+                        final heightFactor = (spending / maxSpending).clamp(
+                          0.05,
+                          1.0,
+                        );
+
+                        return Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Container(
+                              width: 30,
+                              height: 70 * heightFactor,
+                              decoration: BoxDecoration(
+                                color: index == 6
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.primary
+                                          .withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              DateFormat('E').format(last7Days[index])[0],
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: index == 6
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Colors.grey[600],
+                                fontWeight: index == 6
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        );
+                      }),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _buildBudgetProgress(
+                    context,
+                    label: 'Cash Spending',
+                    amount: cashTotal,
+                    budget: 500, // Placeholder budget
+                    color: Colors.orange,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildBudgetProgress(
+                    context,
+                    label: 'Card Spending',
+                    amount: cardTotal,
+                    budget: 2000, // Placeholder budget
+                    color: Colors.blue,
+                  ),
+                ],
+              ),
+            ),
+          ],
         );
       },
-    );
-  }
-
-  Widget _buildSummaryItem(
-    BuildContext context, {
-    required String label,
-    required String value,
-    required IconData icon,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: Theme.of(context).colorScheme.secondary,
-            ),
-            const SizedBox(width: 4),
-            Text(label, style: Theme.of(context).textTheme.bodyMedium),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-        ),
-      ],
     );
   }
 
@@ -284,9 +374,7 @@ class HomeScreen extends StatelessWidget {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             TextButton(
-              onPressed: () {
-                // Navigate to expenses tab - this would be handled by parent
-              },
+              onPressed: onNavigateToExpenses,
               child: const Text('View All'),
             ),
           ],
@@ -321,7 +409,7 @@ class HomeScreen extends StatelessWidget {
                         size: 64,
                         color: Theme.of(
                           context,
-                        ).colorScheme.primary.withOpacity(0.3),
+                        ).colorScheme.primary.withValues(alpha: 0.3),
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -374,16 +462,12 @@ class HomeScreen extends StatelessWidget {
 
                   return ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: Theme.of(
-                        context,
-                      ).colorScheme.primaryContainer,
-                      child: Text(
-                        title.isNotEmpty ? title[0].toUpperCase() : '?',
-                        style: TextStyle(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onPrimaryContainer,
-                        ),
+                      backgroundColor: CategoryUtils.getColorForCategory(
+                        category,
+                      ).withValues(alpha: 0.1),
+                      child: Icon(
+                        CategoryUtils.getIconForCategory(category),
+                        color: CategoryUtils.getColorForCategory(category),
                       ),
                     ),
                     title: Text(title),
@@ -399,6 +483,44 @@ class HomeScreen extends StatelessWidget {
               ),
             );
           },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBudgetProgress(
+    BuildContext context, {
+    required String label,
+    required double amount,
+    required double budget,
+    required Color color,
+  }) {
+    final progress = (amount / budget).clamp(0.0, 1.0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+            ),
+            Text(
+              '\$${amount.toInt()} / \$${budget.toInt()}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: progress,
+            backgroundColor: color.withValues(alpha: 0.1),
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+            minHeight: 6,
+          ),
         ),
       ],
     );

@@ -17,19 +17,30 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    final user = await _authService.signInWithGoogle();
+    try {
+      final user = await _authService.signInWithGoogle();
 
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-      if (user == null) {
+      if (mounted) {
+        if (user == null) {
+          // User cancelled or silent failure that returned null
+          // No op or could show "Cancelled"
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sign in failed. Please try again.'),
+          SnackBar(
+            content: Text('Sign in failed: ${e.toString()}'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }

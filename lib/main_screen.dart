@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+
+import '../services/auth_service.dart';
 import 'screens/add_screen.dart';
 import 'screens/expenses_screen.dart';
 import 'screens/budgeting_screen.dart';
 import 'screens/charts_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/chat_screen.dart';
 
 class MainScreen extends StatefulWidget {
   final VoidCallback onThemeToggle;
@@ -23,10 +26,13 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _widgetOptions = [
-      HomeScreen(onNavigateToAdd: () => _onItemTapped(1)),
+      HomeScreen(
+        onNavigateToAdd: () => _onItemTapped(1),
+        onNavigateToExpenses: () => _onItemTapped(2),
+      ),
       const AddScreen(),
       const ExpensesScreen(),
-      const BudgetingScreen(),
+      const SpendingBreakdownScreen(),
       const ChartsScreen(),
     ];
   }
@@ -52,17 +58,34 @@ class _MainScreenState extends State<MainScreen> {
             onPressed: widget.onThemeToggle,
             tooltip: 'Toggle theme',
           ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await AuthService().signOut();
+            },
+            tooltip: 'Logout',
+          ),
         ],
       ),
       body: _widgetOptions.elementAt(_selectedIndex),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ChatScreen()),
+          );
+        },
+        tooltip: 'Ask AI',
+        child: const Icon(Icons.auto_awesome),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.add), label: 'Add'),
           BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Expenses'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet),
-            label: 'Budget',
+            icon: Icon(Icons.pie_chart),
+            label: 'Breakdown',
           ),
           BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Charts'),
         ],
@@ -82,7 +105,7 @@ class _MainScreenState extends State<MainScreen> {
       case 2:
         return 'Expenses';
       case 3:
-        return 'Budgeting';
+        return 'Spending Breakdown';
       case 4:
         return 'Charts';
       default:

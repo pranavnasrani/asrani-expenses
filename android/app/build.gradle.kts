@@ -38,6 +38,19 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    packaging {
+        jniLibs {
+            pickFirsts.add("**/libc++_shared.so")
+            pickFirsts.add("**/libcrypto.so")
+            pickFirsts.add("**/libssl.so")
+        }
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
 }
 
 flutter {

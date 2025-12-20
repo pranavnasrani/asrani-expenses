@@ -1,11 +1,13 @@
 import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/gemini_service.dart';
+import '../services/storage_service.dart';
+import '../utils/category_utils.dart';
 
 class AddScreen extends StatefulWidget {
   const AddScreen({super.key});
@@ -21,6 +23,7 @@ class _AddScreenState extends State<AddScreen> {
   final _formKey = GlobalKey<FormState>();
 
   File? _selectedImage;
+  Uint8List? _selectedImageBytes;
   bool _isLoading = false;
   bool _isScanning = false;
 
@@ -37,6 +40,7 @@ class _AddScreenState extends State<AddScreen> {
   ];
 
   final GeminiService _geminiService = GeminiService();
+  final StorageService _storageService = StorageService();
 
   @override
   void initState() {
@@ -88,7 +92,7 @@ class _AddScreenState extends State<AddScreen> {
         }
       }
     } catch (e) {
-      print('Error fetching categories: $e');
+      debugPrint('Error fetching categories: $e');
     }
   }
 
@@ -105,9 +109,13 @@ class _AddScreenState extends State<AddScreen> {
         // Load image
         dynamic imageSource;
         if (kIsWeb) {
-          imageSource = await pickedFile.readAsBytes();
+          final bytes = await pickedFile.readAsBytes();
+          imageSource = bytes;
+          _selectedImageBytes = bytes;
         } else {
+          final bytes = await pickedFile.readAsBytes();
           _selectedImage = File(pickedFile.path);
+          _selectedImageBytes = bytes;
           imageSource = _selectedImage;
         }
 
@@ -163,7 +171,9 @@ class _AddScreenState extends State<AddScreen> {
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
     if (pickedFile != null) {
+      final bytes = await pickedFile.readAsBytes();
       setState(() {
+        _selectedImageBytes = bytes;
         if (!kIsWeb) {
           _selectedImage = File(pickedFile.path);
         }
@@ -222,15 +232,12 @@ class _AddScreenState extends State<AddScreen> {
 
     try {
       String? imageUrl;
-      if (_selectedImage != null) {
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('users')
-            .child(user.uid)
-            .child('receipts')
-            .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-        await ref.putFile(_selectedImage!);
-        imageUrl = await ref.getDownloadURL();
+      if (_selectedImageBytes != null) {
+        imageUrl = await _storageService.uploadReceipt(
+          userId: user.uid,
+          file: _selectedImage,
+          bytes: _selectedImageBytes,
+        );
       }
 
       await FirebaseFirestore.instance
@@ -241,7 +248,7 @@ class _AddScreenState extends State<AddScreen> {
             'title': title,
             'amount': amount,
             'date': DateTime.now(),
-            'imageUrl': imageUrl,
+            if (imageUrl != null) 'imageUrl': imageUrl,
             'place': place,
             'category': _selectedCategory ?? 'Other',
             'paymentMethod': _selectedPaymentMethod ?? 'Cash',
@@ -260,7 +267,7 @@ class _AddScreenState extends State<AddScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ).showSnackBar(SnackBar(content: Text('Error adding expense: $e')));
       }
     } finally {
       if (mounted) {
@@ -277,6 +284,7 @@ class _AddScreenState extends State<AddScreen> {
     _placeController.clear();
     setState(() {
       _selectedImage = null;
+      _selectedImageBytes = null;
       _selectedCategory = _categories.isNotEmpty ? _categories.first : null;
       _selectedPaymentMethod = _paymentMethods.first;
     });
@@ -356,19 +364,31 @@ class _AddScreenState extends State<AddScreen> {
                       value: _selectedCategory,
                       decoration: const InputDecoration(
                         labelText: 'Category',
-                        prefixIcon: Icon(Icons.category),
+                        prefixIcon: Icon(Icons.category_outlined),
                       ),
-                      items: _categories
-                          .map(
-                            (cat) =>
-                                DropdownMenuItem(value: cat, child: Text(cat)),
-                          )
-                          .toList(),
-                      onChanged: (value) {
+                      items: _categories.map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Row(
+                            children: [
+                              Icon(
+                                CategoryUtils.getIconForCategory(value),
+                                color: CategoryUtils.getColorForCategory(value),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(value),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (newValue) {
                         setState(() {
-                          _selectedCategory = value;
+                          _selectedCategory = newValue;
                         });
                       },
+                      validator: (val) =>
+                          val == null ? 'Please select a category' : null,
                     ),
                     const SizedBox(height: 16),
 
@@ -479,13 +499,13 @@ class _AddScreenState extends State<AddScreen> {
           style: Theme.of(context).textTheme.titleSmall,
         ),
         const SizedBox(height: 8),
-        if (_selectedImage != null)
+        if (_selectedImageBytes != null)
           Stack(
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: Image.file(
-                  _selectedImage!,
+                child: Image.memory(
+                  _selectedImageBytes!,
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
@@ -498,6 +518,7 @@ class _AddScreenState extends State<AddScreen> {
                   icon: const Icon(Icons.close, color: Colors.white),
                   onPressed: () {
                     setState(() {
+                      _selectedImageBytes = null;
                       _selectedImage = null;
                     });
                   },

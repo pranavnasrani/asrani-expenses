@@ -3,6 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/category_utils.dart';
+import '../widgets/shimmer_loading.dart';
+import '../services/export_service.dart';
+import '../services/feedback_service.dart';
 import 'chat_screen.dart';
 
 class ExpensesScreen extends StatefulWidget {
@@ -270,6 +273,95 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     );
   }
 
+  void _showExportOptions(BuildContext context) {
+    final exportService = ExportService();
+    final feedback = FeedbackService();
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Export Expenses',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Choose a format to export your expense data',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 24),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.table_chart, color: Colors.green),
+              ),
+              title: const Text('Export as CSV'),
+              subtitle: const Text('For spreadsheets like Excel'),
+              onTap: () async {
+                Navigator.pop(context);
+                await feedback.tapFeedback();
+                try {
+                  await exportService.exportToCSV();
+                  await feedback.successFeedback();
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Export failed: $e')),
+                    );
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.picture_as_pdf, color: Colors.red),
+              ),
+              title: const Text('Export as PDF'),
+              subtitle: const Text('Formatted expense report'),
+              onTap: () async {
+                Navigator.pop(context);
+                await feedback.tapFeedback();
+                try {
+                  await exportService.exportToPDF();
+                  await feedback.successFeedback();
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Export failed: $e')),
+                    );
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (user == null) return const Center(child: Text('Please log in'));
@@ -277,6 +369,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Expenses'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download_rounded),
+            onPressed: () => _showExportOptions(context),
+            tooltip: 'Export',
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
@@ -325,7 +424,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           }
 
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const ExpenseListShimmer();
           }
 
           final allDocs = snapshot.data?.docs ?? [];

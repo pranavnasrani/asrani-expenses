@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../utils/category_utils.dart';
+import '../widgets/insights_widget.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onNavigateToAdd;
@@ -29,6 +30,10 @@ class HomeScreen extends StatelessWidget {
 
           // Quick Action Cards
           _buildQuickActions(context),
+          const SizedBox(height: 24),
+
+          // AI Insights Widget
+          const InsightsWidget(),
           const SizedBox(height: 24),
 
           // Monthly Summary & Dashboard

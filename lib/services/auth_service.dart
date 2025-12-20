@@ -4,11 +4,31 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: kIsWeb
-        ? '423024582059-8buucbs9j9nttes047f8tostbrpobdvt.apps.googleusercontent.com'
-        : null,
-  );
+
+  // iOS requires the CLIENT_ID from GoogleService-Info.plist
+  // Web requires the web client ID
+  // Android uses google-services.json automatically
+  late final GoogleSignIn _googleSignIn;
+
+  AuthService() {
+    String? clientId;
+
+    if (kIsWeb) {
+      // Web client ID from Firebase Console
+      clientId =
+          '423024582059-8buucbs9j9nttes047f8tostbrpobdvt.apps.googleusercontent.com';
+    } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      // iOS CLIENT_ID from GoogleService-Info.plist
+      clientId =
+          '423024582059-gd3bfo1gqom81ovf9huot0a5stndo6dh.apps.googleusercontent.com';
+    }
+    // Android: clientId should be null, it uses google-services.json automatically
+
+    _googleSignIn = GoogleSignIn(
+      clientId: clientId,
+      scopes: ['email', 'profile'],
+    );
+  }
 
   // Auth State Stream
   Stream<User?> get authStateChanges => _auth.authStateChanges();

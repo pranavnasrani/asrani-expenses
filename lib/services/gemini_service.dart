@@ -228,4 +228,45 @@ Answer the user's question naturally and concisely based *only* on the data prov
       return 'I encountered an error analyzing the data.';
     }
   }
+
+  /// Generates AI-powered weekly spending insights
+  Future<String> generateWeeklyInsight({
+    required double totalSpent,
+    required int transactionCount,
+    required String topCategory,
+    required double topCategoryAmount,
+    required Map<String, double> categoryBreakdown,
+  }) async {
+    try {
+      final categoryList = categoryBreakdown.entries
+          .map((e) => '${e.key}: \$${e.value.toStringAsFixed(2)}')
+          .join(', ');
+
+      final prompt =
+          '''
+You are a friendly financial assistant. Generate a SHORT, personalized insight (2-3 sentences max) based on this week's spending:
+
+📊 Total Spent: \$${totalSpent.toStringAsFixed(2)}
+📝 Transactions: $transactionCount
+🏆 Top Category: $topCategory (\$${topCategoryAmount.toStringAsFixed(2)})
+📋 Breakdown: $categoryList
+
+Rules:
+- Be encouraging and helpful, not judgmental
+- Include one actionable tip if appropriate
+- Use 1-2 relevant emojis
+- Keep it brief and scannable
+- Don't repeat the exact numbers, synthesize them into insights
+''';
+
+      final content = [Content.text(prompt)];
+      final response = await _model.generateContent(content);
+
+      return response.text ??
+          "You spent \$${totalSpent.toStringAsFixed(0)} this week. Keep tracking! 📊";
+    } catch (e) {
+      debugPrint('Error generating insight: $e');
+      return "You're doing great tracking your expenses! 💪";
+    }
+  }
 }

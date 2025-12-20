@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as path;
 
 class StorageService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -46,8 +45,9 @@ class StorageService {
       } else {
         if (file == null) {
           // Fallback to putData if file is not provided but bytes are (e.g. from some pickers)
-          if (bytes == null)
+          if (bytes == null) {
             throw Exception('Either file or bytes are required for upload');
+          }
           uploadTask = ref.putData(bytes, metadata);
         } else {
           uploadTask = ref.putFile(file, metadata);

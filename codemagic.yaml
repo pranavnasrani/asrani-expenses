@@ -1,0 +1,96 @@
+workflows:
+  ios-workflow:
+    name: iOS Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    
+    environment:
+      groups:
+        - firebase_credentials
+        - gemini_api
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      
+    scripts:
+      - name: Set up Flutter
+        script: |
+          flutter pub get
+          
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios && pod install
+          
+      - name: Set up code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files $(xcode-project detect-bundle-id) --type IOS_APP_DEVELOPMENT
+          keychain add-certificates
+          xcode-project use-profiles
+          
+      - name: Flutter analyze
+        script: |
+          flutter analyze
+          
+      - name: Build iOS
+        script: |
+          flutter build ios --release --no-codesign \
+            --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY
+            
+      - name: Build IPA
+        script: |
+          cd ios
+          xcode-project build-ipa \
+            --workspace Runner.xcworkspace \
+            --scheme Runner \
+            --archive-flags="-destination 'generic/platform=iOS'"
+            
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+      
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true
+
+  android-workflow:
+    name: Android Build
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    
+    environment:
+      groups:
+        - firebase_credentials
+        - gemini_api
+      flutter: stable
+      java: 17
+      
+    scripts:
+      - name: Set up Flutter
+        script: |
+          flutter pub get
+          
+      - name: Flutter analyze
+        script: |
+          flutter analyze
+          
+      - name: Build APK
+        script: |
+          flutter build apk --release \
+            --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY
+            
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true

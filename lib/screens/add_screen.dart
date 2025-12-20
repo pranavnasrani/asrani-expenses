@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/gemini_service.dart';
 import '../services/storage_service.dart';
+import '../services/feedback_service.dart';
 import '../utils/category_utils.dart';
 
 class AddScreen extends StatefulWidget {
@@ -41,12 +42,62 @@ class _AddScreenState extends State<AddScreen> {
 
   final GeminiService _geminiService = GeminiService();
   final StorageService _storageService = StorageService();
+  final FeedbackService _feedback = FeedbackService();
+  List<String> _locationHistory = [];
 
   @override
   void initState() {
     super.initState();
     _fetchCategories();
+    _fetchLocationHistory();
     _selectedPaymentMethod = _paymentMethods.first;
+  }
+
+  Future<void> _fetchLocationHistory() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('settings')
+          .doc('locationHistory')
+          .get();
+
+      if (doc.exists && doc.data() != null) {
+        if (mounted) {
+          setState(() {
+            _locationHistory = List<String>.from(doc.data()!['places'] ?? []);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching location history: $e');
+    }
+  }
+
+  Future<void> _saveLocationToHistory(String place) async {
+    if (place.isEmpty) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      if (!_locationHistory.contains(place)) {
+        _locationHistory.insert(0, place);
+        if (_locationHistory.length > 20) {
+          _locationHistory = _locationHistory.take(20).toList();
+        }
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('settings')
+            .doc('locationHistory')
+            .set({'places': _locationHistory});
+      }
+    } catch (e) {
+      debugPrint('Error saving location history: $e');
+    }
   }
 
   Future<void> _fetchCategories() async {
@@ -255,7 +306,16 @@ class _AddScreenState extends State<AddScreen> {
           });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        // Capture messenger before async gap
+        final messenger = ScaffoldMessenger.of(context);
+
+        // Save place to history
+        await _saveLocationToHistory(place);
+
+        // Success feedback (haptic + sound)
+        await _feedback.successFeedback();
+
+        messenger.showSnackBar(
           const SnackBar(
             content: Text('Expense added successfully!'),
             backgroundColor: Colors.green,
@@ -348,14 +408,73 @@ class _AddScreenState extends State<AddScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Place Field with Google Places
-                    TextFormField(
-                      controller: _placeController,
-                      decoration: const InputDecoration(
-                        labelText: 'Place',
-                        prefixIcon: Icon(Icons.location_on),
-                        hintText: 'Search location...',
-                      ),
+                    // Place Field with Autocomplete from history
+                    Autocomplete<String>(
+                      optionsBuilder: (TextEditingValue textEditingValue) {
+                        if (textEditingValue.text.isEmpty) {
+                          return _locationHistory.take(5);
+                        }
+                        return _locationHistory.where((String option) {
+                          return option.toLowerCase().contains(
+                            textEditingValue.text.toLowerCase(),
+                          );
+                        });
+                      },
+                      onSelected: (String selection) {
+                        _placeController.text = selection;
+                        _feedback.lightTap();
+                      },
+                      fieldViewBuilder:
+                          (context, controller, focusNode, onSubmitted) {
+                            // Sync the controller text
+                            if (controller.text != _placeController.text) {
+                              controller.text = _placeController.text;
+                            }
+                            return TextFormField(
+                              controller: controller,
+                              focusNode: focusNode,
+                              decoration: const InputDecoration(
+                                labelText: 'Place',
+                                prefixIcon: Icon(Icons.location_on),
+                                hintText: 'Type or select from history...',
+                              ),
+                              onChanged: (value) {
+                                _placeController.text = value;
+                              },
+                            );
+                          },
+                      optionsViewBuilder: (context, onSelected, options) {
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: Material(
+                            elevation: 4,
+                            borderRadius: BorderRadius.circular(12),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                maxHeight: 200,
+                                maxWidth: 300,
+                              ),
+                              child: ListView.builder(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                itemCount: options.length,
+                                itemBuilder: (context, index) {
+                                  final option = options.elementAt(index);
+                                  return ListTile(
+                                    leading: const Icon(
+                                      Icons.history,
+                                      size: 20,
+                                    ),
+                                    title: Text(option),
+                                    dense: true,
+                                    onTap: () => onSelected(option),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
 

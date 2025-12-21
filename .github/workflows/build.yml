@@ -9,7 +9,7 @@ on:
 jobs:
   ios-build:
     name: iOS Build
-    runs-on: macos-13
+    runs-on: macos-latest
 
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

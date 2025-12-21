@@ -352,6 +352,7 @@
 				SUPPORTED_PLATFORMS = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
+				SWIFT_VERSION = "5.0";
 			};
 			name = Profile;
 		};
@@ -477,6 +478,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_VERSION = "5.0";
 			};
 			name = Debug;
 		};
@@ -531,6 +533,7 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
+				SWIFT_VERSION = "5.0";
 			};
 			name = Release;
 		};

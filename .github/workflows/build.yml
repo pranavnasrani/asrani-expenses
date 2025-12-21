@@ -59,11 +59,11 @@ jobs:
           channel: 'stable'
           cache: true
           
-      - name: Install dependencies
-        run: flutter pub get
-        
       - name: Clean build environment
         run: flutter clean
+        
+      - name: Install dependencies
+        run: flutter pub get
         
       - name: Install CocoaPods
         run: cd ios && pod install --repo-update

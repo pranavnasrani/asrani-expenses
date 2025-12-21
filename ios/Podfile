@@ -1,24 +1,23 @@
-# Standard Flutter Podfile
+# Uncomment this line to define a global platform for your project
 platform :ios, '13.0'
 
-# CocoaPods analytics sends network stats synchronously during install.
-# If you're behind a firewall or have a slow network, this can cause a timeout.
-# Uncomment and set the value to true to disable it.
+# CocoaPods analytics sends network stats synchronously affecting `pod install` performance.
+# Uncomment the following line to disable it.
 # disable_cocoapods_analytics!
 
 install! 'cocoapods', :deterministic_uuids => false
 
-# Flutter's iOS instructions require this line.
-flutter_ios_podfile_setup = File.join(File.dirname(File.realpath(__FILE__)), '.flutter-plugins-dependencies')
-if File.exist?(flutter_ios_podfile_setup)
-  require flutter_ios_podfile_setup
-end
+# This is required for Flutter to install iOS pods
+require_relative 'Flutter/podhelper.rb'
+
+flutter_ios_podfile_setup
 
 target 'Runner' do
   use_frameworks!
   use_modular_headers!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+
   target 'RunnerTests' do
     inherit! :search_paths
   end

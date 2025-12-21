@@ -9,7 +9,7 @@ on:
 jobs:
   ios-build:
     name: iOS Build
-    runs-on: macos-14
+    runs-on: macos-13
 
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -33,8 +33,10 @@ jobs:
       - name: Install CocoaPods
         run: |
           cd ios
-          # Removing Podfile.lock forces a fresh resolution using your new Podfile logic
-          rm -f Podfile.lock 
+          rm -rf Pods
+          rm -f Podfile.lock
+          # This command helps re-link the xcconfig files
+          pod deintegrate
           pod install --repo-update
 
       - name: Build iOS app (no signing) with GEMINI_API_KEY

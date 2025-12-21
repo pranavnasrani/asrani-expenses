@@ -10,15 +10,11 @@ project 'Runner', {
 
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
-  unless File.exist?(generated_xcode_build_settings_path)
-    raise "Generated.xcconfig not found. Run 'flutter pub get' first."
-  end
   File.read(generated_xcode_build_settings_path).match(/FLUTTER_ROOT\=(.*)/)[1].strip
 end
 
 require File.expand_path(File.join(flutter_root, 'packages', 'flutter_tools', 'bin', 'podhelper'))
 
-# The "target 'Runner'" block is mandatory to fix the "abstract target" error
 target 'Runner' do
   use_frameworks!
   use_modular_headers!
@@ -31,14 +27,12 @@ post_install do |installer|
     flutter_additional_ios_build_settings(target)
     
     target.build_configurations.each do |config|
-      # Fix for "Unable to determine Swift version"
+      # Fix the Firebase 'sending' error and audioplayers Swift error
       config.build_settings['SWIFT_VERSION'] = '5.0'
-      
-      # Fix for "Minimum Deployment Target" warnings/errors
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
       
-      # Specific fix for Firebase/Google Sign-in issues often found in CI
-      config.build_settings['ENABLE_BITCODE'] = 'NO'
+      # This line is specifically for the new Firebase shared swift error
+      config.build_settings['OTHER_SWIFT_FLAGS'] = '$(inherited) -Xfrontend -disable-implicit-concurrency-module-import'
     end
   end
 end

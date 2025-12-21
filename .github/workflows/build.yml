@@ -1,64 +1,95 @@
-name: iOS & Android Build
+name: Flutter CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+# Cancel in-progress runs if a new push is made to the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-ios:
-    name: Build iOS
-    runs-on: macos-latest
-
-    env:
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
+  analyze:
+    name: Flutter Analyze
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: stable
-
+          channel: 'stable'
+          cache: true
+          
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Build iOS (No Sign)
-        run: |
-          flutter build ios --release --no-codesign \
-            --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY
-
-      - name: Upload iOS Bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: iOS-Runner-App
-          path: build/ios/iphoneos/Runner.app
+        
+      - name: Check for errors
+        run: flutter analyze
 
   build-android:
     name: Build Android
+    needs: analyze
     runs-on: ubuntu-latest
-
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
     steps:
       - uses: actions/checkout@v4
-
+      
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+          
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: stable
-
+          channel: 'stable'
+          cache: true
+          
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Build APK
-        run: |
-          flutter build apk --release \
-            --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY
-
+        
+      - name: Build APK (Release)
+        run: flutter build apk --release --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY
+        
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Android-APK
           path: build/app/outputs/flutter-apk/app-release.apk
+
+  build-ios:
+    name: Build iOS
+    needs: analyze
+    runs-on: macos-latest
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+          
+      - name: Install dependencies
+        run: flutter pub get
+        
+      - name: Install CocoaPods
+        run: cd ios && pod install
+        
+      - name: Build iOS (No Sign)
+        run: flutter build ios --release --no-codesign --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY
+        
+      - name: Upload iOS Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: iOS-Runner-App
+          path: build/ios/iphoneos/Runner.app

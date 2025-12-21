@@ -9,7 +9,7 @@ on:
 jobs:
   ios-build:
     name: iOS Build
-    runs-on: macos-latest
+    runs-on: macos-14
 
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -17,6 +17,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Select Xcode 15
+        run: sudo xcode-select -s /Applications/Xcode_15.0.app
+
+      - name: Verify Xcode version
+        run: xcodebuild -version
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -29,14 +35,9 @@ jobs:
           flutter clean
           flutter pub get
 
-
       - name: Install CocoaPods
         run: |
           cd ios
-          rm -rf Pods
-          rm -f Podfile.lock
-          # This command helps re-link the xcconfig files
-          pod deintegrate
           pod install --repo-update
 
       - name: Build iOS app (no signing) with GEMINI_API_KEY
@@ -48,10 +49,8 @@ jobs:
         run: |
           cd build/ios/iphoneos
 
-          # Zip Runner.app
           zip -r Runner.app.zip Runner.app
 
-          # Create unsigned IPA
           mkdir Payload
           cp -R Runner.app Payload/
           zip -r Runner.ipa Payload

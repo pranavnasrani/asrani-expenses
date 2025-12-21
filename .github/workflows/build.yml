@@ -29,16 +29,12 @@ jobs:
           flutter clean
           flutter pub get
 
-      - name: Force iOS file generation
-        run: |
-          flutter create --platforms=ios .
 
       - name: Install CocoaPods
         run: |
           cd ios
-          # Ensure we start fresh so the Podfile post_install logic runs on everything
-          rm -rf Pods
-          rm -rf Podfile.lock
+          # Removing Podfile.lock forces a fresh resolution using your new Podfile logic
+          rm -f Podfile.lock 
           pod install --repo-update
 
       - name: Build iOS app (no signing) with GEMINI_API_KEY

@@ -36,6 +36,9 @@ jobs:
       - name: Install CocoaPods
         run: |
           cd ios
+          # Ensure we start fresh so the Podfile post_install logic runs on everything
+          rm -rf Pods
+          rm -rf Podfile.lock
           pod install --repo-update
 
       - name: Build iOS app (no signing) with GEMINI_API_KEY

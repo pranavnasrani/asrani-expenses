@@ -1,0 +1,34 @@
+# The next line is important for Flutter
+# It might fail on Windows if podhelper.rb isn't generated, but is required for the Mac build to work.
+begin
+  require_relative File.join(File.dirname(File.realpath(__FILE__)), 'Flutter', 'podhelper.rb')
+rescue LoadError
+  # Fallback or warning if podhelper is missing
+end
+
+platform :ios, '13.0'
+
+target 'Runner' do
+  use_frameworks!
+  use_modular_headers!
+
+  if defined?(flutter_install_all_ios_pods)
+    flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  end
+  
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    if defined?(flutter_additional_ios_build_settings)
+      flutter_additional_ios_build_settings(target)
+    end
+    
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+    end
+  end
+end

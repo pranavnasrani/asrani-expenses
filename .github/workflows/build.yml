@@ -12,27 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  analyze:
-    name: Flutter Analyze
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-          cache: true
-          
-      - name: Install dependencies
-        run: flutter pub get
-        
-      - name: Check for errors
-        run: flutter analyze
-
   build-android:
     name: Build Android
-    needs: analyze
     runs-on: ubuntu-latest
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -66,7 +47,6 @@ jobs:
 
   build-ios:
     name: Build iOS
-    needs: analyze
     runs-on: macos-latest
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

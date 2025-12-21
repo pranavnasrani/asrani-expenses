@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/auth_service.dart';
+import '../services/export_service.dart';
+import '../services/feedback_service.dart';
 import 'screens/add_screen.dart';
 import 'screens/expenses_screen.dart';
 import 'screens/budgeting_screen.dart';
@@ -19,6 +21,8 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
+  final ExportService _exportService = ExportService();
+  final FeedbackService _feedback = FeedbackService();
 
   late final List<Widget> _widgetOptions;
 
@@ -43,12 +47,105 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
+  void _showExportOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Export Expenses',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Choose a format to export your expense data',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 24),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.table_chart, color: Colors.green),
+              ),
+              title: const Text('Export as CSV'),
+              subtitle: const Text('For spreadsheets like Excel'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _feedback.tapFeedback();
+                try {
+                  await _exportService.exportToCSV();
+                  await _feedback.successFeedback();
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Export failed: $e')),
+                    );
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.picture_as_pdf, color: Colors.red),
+              ),
+              title: const Text('Export as PDF'),
+              subtitle: const Text('Formatted expense report'),
+              onTap: () async {
+                Navigator.pop(context);
+                await _feedback.tapFeedback();
+                try {
+                  await _exportService.exportToPDF();
+                  await _feedback.successFeedback();
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Export failed: $e')),
+                    );
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(_getTitleForIndex(_selectedIndex)),
         actions: [
+          // Show export button when on Expenses tab
+          if (_selectedIndex == 2)
+            IconButton(
+              icon: const Icon(Icons.download_rounded),
+              onPressed: _showExportOptions,
+              tooltip: 'Export Expenses',
+            ),
           IconButton(
             icon: Icon(
               Theme.of(context).brightness == Brightness.dark

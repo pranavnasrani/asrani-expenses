@@ -9,6 +9,7 @@ import '../services/gemini_service.dart';
 import '../services/storage_service.dart';
 import '../services/feedback_service.dart';
 import '../utils/category_utils.dart';
+import '../widgets/success_animation.dart';
 
 class AddScreen extends StatefulWidget {
   const AddScreen({super.key});
@@ -283,12 +284,16 @@ class _AddScreenState extends State<AddScreen> {
 
     try {
       String? imageUrl;
+      bool uploadFailed = false;
       if (_selectedImageBytes != null) {
         imageUrl = await _storageService.uploadReceipt(
           userId: user.uid,
           file: _selectedImage,
           bytes: _selectedImageBytes,
         );
+        if (imageUrl == null) {
+          uploadFailed = true;
+        }
       }
 
       await FirebaseFirestore.instance
@@ -306,21 +311,31 @@ class _AddScreenState extends State<AddScreen> {
           });
 
       if (mounted) {
-        // Capture messenger before async gap
+        // Capture references and show animation BEFORE any async operations
         final messenger = ScaffoldMessenger.of(context);
+        showSuccessAnimation(context);
 
-        // Save place to history
+        // These async operations happen after animation is triggered
         await _saveLocationToHistory(place);
-
-        // Success feedback (haptic + sound)
         await _feedback.successFeedback();
 
-        messenger.showSnackBar(
-          const SnackBar(
-            content: Text('Expense added successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        // Show success or partial success message
+        if (uploadFailed) {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ Expense saved, but receipt upload failed'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        } else {
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('✅ Expense added successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
         _clearForm();
       }
     } catch (e) {

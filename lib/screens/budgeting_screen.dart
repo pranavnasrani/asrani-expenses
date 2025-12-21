@@ -168,7 +168,8 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
                   double cardRollover = 0.0;
                   Map<String, double> categoryRollover = {};
 
-                  if (_enableRollover) {
+                  if (_enableRollover && prevDocs.isNotEmpty) {
+                    // Only calculate rollover if there's actual previous month data
                     double prevTotalSpent = 0.0;
                     double prevCashSpent = 0.0;
                     double prevCardSpent = 0.0;
@@ -192,8 +193,7 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
                           (prevCategorySpent[category] ?? 0.0) + amount;
                     }
 
-                    // Rollover = Budget - Spent (If positive, it's surplus. If negative, it's deficit)
-                    // We ADD this to the current budget.
+                    // Rollover = Budget - Spent (surplus or deficit from last month)
                     rolloverAmount = overallBudget - prevTotalSpent;
                     cashRollover = cashBudget - prevCashSpent;
                     cardRollover = cardBudget - prevCardSpent;
@@ -202,6 +202,7 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
                           val - (prevCategorySpent[key] ?? 0.0);
                     });
                   }
+                  // If rollover is enabled but no previous month data, rollover stays 0
 
                   // --- Apply Rollover to Budgets ---
                   final finalOverallBudget = overallBudget + rolloverAmount;
@@ -429,8 +430,9 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
     Color color, {
     double? rollover,
   }) {
-    // If budget is 0 (not set), treat as 0% progress unless spent > 0
-    final bool isOverBudget = spent > budget && budget > 0;
+    // Calculate balance
+    final double balance = budget - spent;
+    final bool isOverBudget = balance < 0 && budget > 0;
     final Color progressColor = isOverBudget ? Colors.red : color;
 
     return Card(
@@ -465,6 +467,41 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
               color: progressColor,
               minHeight: 10,
               borderRadius: BorderRadius.circular(5),
+            ),
+            const SizedBox(height: 12),
+            // Balance prominently displayed
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              decoration: BoxDecoration(
+                color: (balance >= 0 ? Colors.green : Colors.red).withValues(
+                  alpha: 0.1,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    balance >= 0 ? Icons.savings : Icons.trending_down,
+                    color: balance >= 0 ? Colors.green : Colors.red,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Balance: \$${balance.abs().toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: balance >= 0 ? Colors.green : Colors.red,
+                    ),
+                  ),
+                  if (balance < 0)
+                    const Text(
+                      ' over',
+                      style: TextStyle(color: Colors.red, fontSize: 14),
+                    ),
+                ],
+              ),
             ),
             const SizedBox(height: 8),
             Row(

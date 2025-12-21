@@ -40,7 +40,7 @@ jobs:
                      -exportPath $PWD/build/ipa
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: iOS-IPA
           path: ios/build/ipa

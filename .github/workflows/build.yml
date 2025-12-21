@@ -23,24 +23,42 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build iOS
+      - name: Build iOS (No Sign)
         run: |
           flutter build ios --release --no-codesign \
             --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY
 
-      - name: Build IPA
-        run: |
-          cd ios
-          xcodebuild -workspace Runner.xcworkspace \
-                     -scheme Runner \
-                     -archivePath $PWD/build/Runner.xcarchive archive
-          xcodebuild -exportArchive \
-                     -archivePath $PWD/build/Runner.xcarchive \
-                     -exportOptionsPlist ExportOptions.plist \
-                     -exportPath $PWD/build/ipa
-
-      - name: Upload artifacts
+      - name: Upload iOS Bundle
         uses: actions/upload-artifact@v4
         with:
-          name: iOS-IPA
-          path: ios/build/ipa
+          name: iOS-Runner-App
+          path: build/ios/iphoneos/Runner.app
+
+  build-android:
+    name: Build Android
+    runs-on: ubuntu-latest
+
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: |
+          flutter build apk --release \
+            --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-APK
+          path: build/app/outputs/flutter-apk/app-release.apk

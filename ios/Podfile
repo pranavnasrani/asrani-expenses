@@ -1,21 +1,24 @@
-# The next line is important for Flutter
-# It might fail on Windows if podhelper.rb isn't generated, but is required for the Mac build to work.
-begin
-  require_relative File.join(File.dirname(File.realpath(__FILE__)), 'Flutter', 'podhelper.rb')
-rescue LoadError
-  # Fallback or warning if podhelper is missing
-end
-
+# Standard Flutter Podfile
 platform :ios, '13.0'
+
+# CocoaPods analytics sends network stats synchronously during install.
+# If you're behind a firewall or have a slow network, this can cause a timeout.
+# Uncomment and set the value to true to disable it.
+# disable_cocoapods_analytics!
+
+install! 'cocoapods', :deterministic_uuids => false
+
+# Flutter's iOS instructions require this line.
+flutter_ios_podfile_setup = File.join(File.dirname(File.realpath(__FILE__)), '.flutter-plugins-dependencies')
+if File.exist?(flutter_ios_podfile_setup)
+  require flutter_ios_podfile_setup
+end
 
 target 'Runner' do
   use_frameworks!
   use_modular_headers!
 
-  if defined?(flutter_install_all_ios_pods)
-    flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
-  end
-  
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
     inherit! :search_paths
   end
@@ -23,10 +26,7 @@ end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
-    if defined?(flutter_additional_ios_build_settings)
-      flutter_additional_ios_build_settings(target)
-    end
-    
+    flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
     end

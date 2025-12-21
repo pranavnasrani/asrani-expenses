@@ -62,8 +62,11 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
         
+      - name: Clean build environment
+        run: flutter clean
+        
       - name: Install CocoaPods
-        run: cd ios && pod install
+        run: cd ios && pod install --repo-update
         
       - name: Build iOS (No Sign)
         run: flutter build ios --release --no-codesign --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY

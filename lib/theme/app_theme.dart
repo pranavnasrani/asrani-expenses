@@ -55,11 +55,11 @@ class AppTheme {
       ),
       bodyLarge: GoogleFonts.inter(
         fontSize: 16,
-        color: textColor.withValues(alpha: 0.8),
+        color: textColor.withOpacity(0.8),
       ),
       bodyMedium: GoogleFonts.inter(
         fontSize: 14,
-        color: textColor.withValues(alpha: 0.7),
+        color: textColor.withOpacity(0.7),
       ),
       labelLarge: GoogleFonts.inter(
         fontSize: 14,

@@ -1,0 +1,105 @@
+name: Flutter Build (iOS + Android with GEMINI_API_KEY)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  ios-build:
+    name: iOS Build
+    runs-on: macos-14
+
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter dependencies
+        run: |
+          flutter clean
+          flutter pub get
+
+      - name: Force iOS file generation
+        run: |
+          flutter create --platforms=ios .
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install --repo-update
+
+      - name: Build iOS app (no signing) with GEMINI_API_KEY
+        run: |
+          flutter build ios --release --no-codesign \
+            --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY
+
+      - name: Package Runner.app and IPA
+        run: |
+          cd build/ios/iphoneos
+
+          # Zip Runner.app
+          zip -r Runner.app.zip Runner.app
+
+          # Create unsigned IPA
+          mkdir Payload
+          cp -R Runner.app Payload/
+          zip -r Runner.ipa Payload
+          rm -rf Payload
+
+      - name: Upload iOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-artifacts
+          path: |
+            build/ios/iphoneos/Runner.app.zip
+            build/ios/iphoneos/Runner.ipa
+
+  android-build:
+    name: Android Build
+    runs-on: ubuntu-latest
+
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter dependencies
+        run: |
+          flutter clean
+          flutter pub get
+
+      - name: Build APK (release) with GEMINI_API_KEY
+        run: |
+          flutter build apk --release \
+            --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY
+
+      - name: Build App Bundle (AAB) with GEMINI_API_KEY
+        run: |
+          flutter build appbundle --release \
+            --dart-define=GEMINI_API_KEY=$GEMINI_API_KEY
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build-artifacts
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab

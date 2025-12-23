@@ -20,7 +20,7 @@ class AuthService {
     } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
       // iOS CLIENT_ID from GoogleService-Info.plist
       clientId =
-          '423024582059-gd3bfo1gqom81ovf9huot0a5stndo6dh.apps.googleusercontent.com';
+          '423024582059-58golj4v958c0gfierouqbbf2jf68vb9.apps.googleusercontent.com';
     }
     // Android: clientId should be null, it uses google-services.json automatically
 

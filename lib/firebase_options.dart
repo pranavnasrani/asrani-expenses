@@ -66,10 +66,10 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDeFDP215xbbnOcPNyU0rzXJF194Kq9fZA',
-    appId: '1:423024582059:ios:6d492ef3806a9baee746ee',
+    appId: '1:423024582059:ios:a9f0d485e41664d5e746ee',
     messagingSenderId: '423024582059',
     projectId: 'asrani-expenses',
     storageBucket: 'asrani-expenses.firebasestorage.app',
-    iosBundleId: 'com.example.asraniExpenses',
+    iosBundleId: 'com.asrani.expenses',
   );
 }

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../utils/category_utils.dart';
 import '../widgets/shimmer_loading.dart';
 import '../services/export_service.dart';
@@ -233,34 +234,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   ),
                   Flexible(
                     child: InteractiveViewer(
-                      child: Image.network(
-                        imageUrl,
-                        fit: BoxFit.contain,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(40),
-                              child: CircularProgressIndicator(),
-                            ),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(40),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.broken_image, size: 48),
-                                  SizedBox(height: 8),
-                                  Text('Could not load receipt'),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                      child: _buildImageWidget(imageUrl, fit: BoxFit.contain),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -512,26 +486,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (imageUrl != null && imageUrl.isNotEmpty)
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(12),
-                        ),
-                        child: SizedBox(
-                          height: 200,
-                          width: double.infinity,
-                          child: Image.network(
-                            imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: Colors.grey[300],
-                                child: const Icon(Icons.broken_image, size: 50),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
@@ -692,6 +646,45 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildImageWidget(String imageUrl, {BoxFit fit = BoxFit.cover}) {
+    if (imageUrl.startsWith('data:image')) {
+      try {
+        final base64String = imageUrl.split(',').last;
+        final bytes = base64Decode(base64String);
+        return Image.memory(
+          bytes,
+          fit: fit,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: Colors.grey[300],
+              child: const Icon(Icons.broken_image, size: 50),
+            );
+          },
+        );
+      } catch (e) {
+        return Container(
+          color: Colors.grey[300],
+          child: const Icon(Icons.broken_image, size: 50),
+        );
+      }
+    }
+
+    return Image.network(
+      imageUrl,
+      fit: fit,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return const Center(child: CircularProgressIndicator());
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: Colors.grey[300],
+          child: const Icon(Icons.broken_image, size: 50),
+        );
+      },
     );
   }
 }

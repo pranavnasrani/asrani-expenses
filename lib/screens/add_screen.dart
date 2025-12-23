@@ -150,7 +150,12 @@ class _AddScreenState extends State<AddScreen> {
 
   Future<void> _pickImageAndScan(ImageSource source) async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: source);
+    final pickedFile = await picker.pickImage(
+      source: source,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 50,
+    );
 
     if (pickedFile != null) {
       setState(() {
@@ -220,7 +225,12 @@ class _AddScreenState extends State<AddScreen> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 50,
+    );
 
     if (pickedFile != null) {
       final bytes = await pickedFile.readAsBytes();

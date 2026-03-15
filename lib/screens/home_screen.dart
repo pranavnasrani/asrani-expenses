@@ -237,7 +237,7 @@ class HomeScreen extends StatelessWidget {
                 .collection('users')
                 .doc(user.uid)
                 .collection('settings')
-                .doc('budgets')
+                .doc('budgets_${DateFormat('yyyy_MM').format(now)}')
                 .snapshots(),
             builder: (context, budgetSnapshot) {
               double cashBudget = 0.0;

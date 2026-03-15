@@ -78,7 +78,7 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
             .collection('users')
             .doc(user!.uid)
             .collection('settings')
-            .doc('budgets')
+            .doc('budgets_${DateFormat('yyyy_MM').format(_selectedDate)}')
             .snapshots(),
         builder: (context, budgetSnapshot) {
           if (budgetSnapshot.hasError) {
@@ -128,24 +128,37 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
                 .snapshots(),
             builder: (context, expenseSnapshot) {
               // Retrieve Previous Month Expenses ONLY if Rollover is ON
-              return FutureBuilder<QuerySnapshot?>(
+              return FutureBuilder<List<dynamic>?>(
                 future: _enableRollover
-                    ? FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(user!.uid)
-                          .collection('expenses')
-                          .where('date', isGreaterThanOrEqualTo: prevStart)
-                          .where('date', isLessThanOrEqualTo: prevEnd)
-                          .get()
+                    ? Future.wait([
+                        FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(user!.uid)
+                            .collection('expenses')
+                            .where('date', isGreaterThanOrEqualTo: prevStart)
+                            .where('date', isLessThanOrEqualTo: prevEnd)
+                            .get(),
+                        FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(user!.uid)
+                            .collection('settings')
+                            .doc('budgets_${DateFormat('yyyy_MM').format(prevMonthDate)}')
+                            .get()
+                      ])
                     : Future.value(null),
-                builder: (context, prevExpenseSnapshot) {
+                builder: (context, prevDataSnapshot) {
                   if (expenseSnapshot.connectionState ==
                       ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
                   final docs = expenseSnapshot.data?.docs ?? [];
-                  final prevDocs = prevExpenseSnapshot.data?.docs ?? [];
+                  final prevDocs = prevDataSnapshot.data != null 
+                      ? (prevDataSnapshot.data![0] as QuerySnapshot).docs 
+                      : [];
+                  final prevBudgetDoc = prevDataSnapshot.data != null
+                      ? (prevDataSnapshot.data![1] as DocumentSnapshot).data() as Map<String, dynamic>? ?? {}
+                      : <String, dynamic>{};
 
                   // --- Calculate Current Spending ---
                   double currentTotalSpent = 0.0;
@@ -200,13 +213,22 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
                           (prevCategorySpent[category] ?? 0.0) + amount;
                     }
 
-                    // Rollover = Budget - Spent (surplus or deficit from last month)
-                    rolloverAmount = overallBudget - prevTotalSpent;
-                    cashRollover = cashBudget - prevCashSpent;
-                    cardRollover = cardBudget - prevCardSpent;
-                    categoryBudgets.forEach((key, val) {
-                      categoryRollover[key] =
-                          val - (prevCategorySpent[key] ?? 0.0);
+                    double prevOverallBudget = (prevBudgetDoc['overallLimit'] as num?)?.toDouble() ?? 0.0;
+                    double prevCashBudget = (prevBudgetDoc['cash'] as num?)?.toDouble() ?? 0.0;
+                    double prevCardBudget = (prevBudgetDoc['card'] as num?)?.toDouble() ?? 0.0;
+                    Map<String, double> prevCategoryBudgets = {};
+                    if (prevBudgetDoc['categories'] != null) {
+                      (prevBudgetDoc['categories'] as Map<String, dynamic>).forEach((k, v) {
+                        prevCategoryBudgets[k] = (v as num).toDouble();
+                      });
+                    }
+
+                    // Rollover = Previous Budget - Previous Spent (surplus or deficit)
+                    rolloverAmount = prevOverallBudget - prevTotalSpent;
+                    cashRollover = prevCashBudget - prevCashSpent;
+                    cardRollover = prevCardBudget - prevCardSpent;
+                    prevCategoryBudgets.forEach((key, val) {
+                      categoryRollover[key] = val - (prevCategorySpent[key] ?? 0.0);
                     });
                   }
                   // If rollover is enabled but no previous month data, rollover stays 0
@@ -369,7 +391,7 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
                       .collection('users')
                       .doc(user!.uid)
                       .collection('settings')
-                      .doc('budgets')
+                      .doc('budgets_${DateFormat('yyyy_MM').format(_selectedDate)}')
                       .set({'enableRollover': val}, SetOptions(merge: true));
                 } catch (e) {
                   debugPrint('Failed to save rollover preference: $e');
@@ -581,7 +603,7 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
           .collection('users')
           .doc(user!.uid)
           .collection('settings')
-          .doc('budgets')
+          .doc('budgets_${DateFormat('yyyy_MM').format(_selectedDate)}')
           .get();
 
       if (doc.exists) {
@@ -648,7 +670,7 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
                     .collection('users')
                     .doc(user!.uid)
                     .collection('settings')
-                    .doc('budgets');
+                    .doc('budgets_${DateFormat('yyyy_MM').format(_selectedDate)}');
 
                 Map<String, dynamic> updates = {};
 

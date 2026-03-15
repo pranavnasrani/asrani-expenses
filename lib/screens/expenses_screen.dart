@@ -479,9 +479,10 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
               return Card(
                 margin: const EdgeInsets.symmetric(vertical: 8),
-                elevation: 2,
+                elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(color: Colors.grey.withOpacity(0.1)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

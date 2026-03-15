@@ -477,100 +477,129 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
     final bool isOverBudget = balance < 0 && budget > 0;
     final Color progressColor = isOverBudget ? Colors.red : color;
 
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: isDark ? [] : [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: progressColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isOverBudget ? Icons.warning_rounded : Icons.check_circle_rounded,
+                  color: progressColor,
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: budget > 0 ? (spent / budget).clamp(0.0, 1.0) : 0,
+              backgroundColor: color.withOpacity(0.1),
+              color: progressColor,
+              minHeight: 12,
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Balance prominently displayed
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: (balance >= 0 ? Colors.green : Colors.red).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+                Icon(
+                  balance >= 0 ? Icons.savings_rounded : Icons.trending_down_rounded,
+                  color: balance >= 0 ? Colors.green : Colors.red,
+                  size: 24,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Balance: \$${balance.abs().toStringAsFixed(2)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                    color: balance >= 0 ? Colors.green : Colors.red,
+                    letterSpacing: -0.5,
                   ),
                 ),
-                Icon(
-                  isOverBudget ? Icons.warning : Icons.check_circle,
-                  color: progressColor,
-                ),
+                if (balance < 0)
+                  const Text(
+                    ' over',
+                    style: TextStyle(color: Colors.red, fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
               ],
             ),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(
-              value: budget > 0 ? (spent / budget).clamp(0.0, 1.0) : 0,
-              backgroundColor: color.withValues(alpha: 0.1),
-              color: progressColor,
-              minHeight: 10,
-              borderRadius: BorderRadius.circular(5),
-            ),
-            const SizedBox(height: 12),
-            // Balance prominently displayed
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-              decoration: BoxDecoration(
-                color: (balance >= 0 ? Colors.green : Colors.red).withValues(
-                  alpha: 0.1,
-                ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    balance >= 0 ? Icons.savings : Icons.trending_down,
-                    color: balance >= 0 ? Colors.green : Colors.red,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
+                  Text('Spent', style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text('\$${spent.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('Budget', style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
                   Text(
-                    'Balance: \$${balance.abs().toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: balance >= 0 ? Colors.green : Colors.red,
-                    ),
+                    '\$${budget.toStringAsFixed(2)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
-                  if (balance < 0)
-                    const Text(
-                      ' over',
-                      style: TextStyle(color: Colors.red, fontSize: 14),
+                  if (rollover != null && rollover != 0)
+                    Text(
+                      '(${rollover > 0 ? '+' : ''}${rollover.toStringAsFixed(2)} rollover)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: rollover > 0 ? Colors.green : Colors.red,
+                      ),
                     ),
                 ],
               ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Spent: \$${spent.toStringAsFixed(2)}'),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'Budget: \$${budget.toStringAsFixed(2)}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    if (rollover != null && rollover != 0)
-                      Text(
-                        '(${rollover > 0 ? '+' : ''}${rollover.toStringAsFixed(2)} rollover)',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: rollover > 0 ? Colors.green : Colors.red,
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }

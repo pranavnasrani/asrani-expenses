@@ -58,20 +58,40 @@ class HomeScreen extends StatelessWidget {
       greeting = 'Good Evening';
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text(
-          '$greeting,',
-          style: Theme.of(
-            context,
-          ).textTheme.headlineSmall?.copyWith(color: Colors.grey[600]),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$greeting,',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              user?.displayName ?? user?.email?.split('@')[0] ?? 'User',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: Theme.of(context).colorScheme.primary,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ],
         ),
-        Text(
-          user?.displayName ?? user?.email?.split('@')[0] ?? 'User',
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.primary,
+        CircleAvatar(
+          radius: 28,
+          backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+          child: Text(
+            (user?.displayName ?? user?.email ?? 'U').toUpperCase().substring(0, 1),
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
         ),
       ],
@@ -83,7 +103,7 @@ class HomeScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Quick Actions', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -91,10 +111,12 @@ class HomeScreen extends StatelessWidget {
               Expanded(
                 child: _buildActionCard(
                   context,
-                  icon: Icons.receipt_long,
+                  icon: Icons.document_scanner_rounded,
                   title: 'Scan Receipt',
-                  subtitle: 'AI-powered extraction',
+                  subtitle: 'AI-powered extract',
                   gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                     colors: [
                       Theme.of(context).colorScheme.primary,
                       Theme.of(context).colorScheme.secondary,
@@ -103,19 +125,19 @@ class HomeScreen extends StatelessWidget {
                   onTap: onNavigateToAdd,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
               Expanded(
                 child: _buildActionCard(
                   context,
-                  icon: Icons.edit,
-                  title: 'Add Manually',
+                  icon: Icons.edit_note_rounded,
+                  title: 'Add Manual',
                   subtitle: 'Quick entry',
                   gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                     colors: [
                       Theme.of(context).colorScheme.secondary,
-                      Theme.of(
-                        context,
-                      ).colorScheme.primary.withValues(alpha: 0.7),
+                      Theme.of(context).colorScheme.primary.withOpacity(0.8),
                     ],
                   ),
                   onTap: onNavigateToAdd,
@@ -138,41 +160,49 @@ class HomeScreen extends StatelessWidget {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(24),
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         decoration: BoxDecoration(
           gradient: gradient,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+              color: gradient.colors.first.withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.white, size: 28),
-            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: Colors.white, size: 28),
+            ),
+            const SizedBox(height: 16),
             Text(
               title,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               subtitle,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.9),
-                fontSize: 12,
+                color: Colors.white.withOpacity(0.8),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -259,20 +289,15 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                color: Theme.of(context).cardTheme.color,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.1)
-                      : Colors.grey.withValues(alpha: 0.2),
-                ),
-                boxShadow: [
+                boxShadow: isDark ? [] : [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
@@ -330,14 +355,22 @@ class HomeScreen extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             Container(
-                              width: 30,
-                              height: 70 * heightFactor,
+                              width: 32,
+                              height: 80 * heightFactor,
                               decoration: BoxDecoration(
+                                gradient: index == 6 ? LinearGradient(
+                                  begin: Alignment.bottomCenter,
+                                  end: Alignment.topCenter,
+                                  colors: [
+                                    Theme.of(context).colorScheme.primary,
+                                    Theme.of(context).colorScheme.secondary,
+                                  ],
+                                ) : null,
                                 color: index == 6
-                                    ? Theme.of(context).colorScheme.primary
+                                    ? null
                                     : Theme.of(context).colorScheme.primary
-                                          .withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(6),
+                                          .withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -456,11 +489,19 @@ class HomeScreen extends StatelessWidget {
             }
 
             return Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+                side: BorderSide(color: Colors.grey.withOpacity(0.1)),
+              ),
               child: ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: snapshot.data!.docs.length,
-                separatorBuilder: (context, index) => const Divider(height: 1),
+                separatorBuilder: (context, index) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Divider(color: Colors.grey.withOpacity(0.1), height: 1),
+                ),
                 itemBuilder: (context, index) {
                   final doc = snapshot.data!.docs[index];
                   final data = doc.data() as Map<String, dynamic>;
@@ -488,21 +529,31 @@ class HomeScreen extends StatelessWidget {
                   }
 
                   return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: CategoryUtils.getColorForCategory(
-                        category,
-                      ).withValues(alpha: 0.1),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    leading: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: CategoryUtils.getColorForCategory(category).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       child: Icon(
                         CategoryUtils.getIconForCategory(category),
                         color: CategoryUtils.getColorForCategory(category),
+                        size: 24,
                       ),
                     ),
-                    title: Text(title),
-                    subtitle: Text('$category • $dateStr'),
+                    title: Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text('$category • $dateStr', style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500)),
+                    ),
                     trailing: Text(
                       '\$${amount.toStringAsFixed(2)}',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   );

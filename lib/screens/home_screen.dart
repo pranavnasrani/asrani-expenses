@@ -212,25 +212,43 @@ class HomeScreen extends StatelessWidget {
               : DateTime.now();
           final method = data['paymentMethod']?.toString().toLowerCase() ?? '';
 
-          if (date.isAfter(startOfMonth)) {
-            monthTotal += amount;
-            if (method == 'cash') {
-              cashTotal += amount;
-            } else if (method.contains('card')) {
-              cardTotal += amount;
+            if (date.isAfter(startOfMonth)) {
+              monthTotal += amount;
+              if (method == 'cash') {
+                cashTotal += amount;
+              } else if (method.contains('card')) {
+                cardTotal += amount;
+              }
+            }
+
+            for (var i = 0; i < 7; i++) {
+              if (date.year == last7Days[i].year &&
+                  date.month == last7Days[i].month &&
+                  date.day == last7Days[i].day) {
+                dailySpending[i] = (dailySpending[i] ?? 0) + amount;
+              }
             }
           }
 
-          for (var i = 0; i < 7; i++) {
-            if (date.year == last7Days[i].year &&
-                date.month == last7Days[i].month &&
-                date.day == last7Days[i].day) {
-              dailySpending[i] = (dailySpending[i] ?? 0) + amount;
-            }
-          }
-        }
+          final isDark = Theme.of(context).brightness == Brightness.dark;
 
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+          return StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('settings')
+                .doc('budgets')
+                .snapshots(),
+            builder: (context, budgetSnapshot) {
+              double cashBudget = 0.0;
+              double cardBudget = 0.0;
+
+              if (budgetSnapshot.hasData && budgetSnapshot.data!.exists) {
+                final budgetData =
+                    budgetSnapshot.data!.data() as Map<String, dynamic>;
+                cashBudget = (budgetData['cash'] as num?)?.toDouble() ?? 0.0;
+                cardBudget = (budgetData['card'] as num?)?.toDouble() ?? 0.0;
+              }
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,26 +359,30 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  _buildBudgetProgress(
-                    context,
-                    label: 'Cash Spending',
-                    amount: cashTotal,
-                    budget: 500, // Placeholder budget
-                    color: Colors.orange,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildBudgetProgress(
-                    context,
-                    label: 'Card Spending',
-                    amount: cardTotal,
-                    budget: 2000, // Placeholder budget
-                    color: Colors.blue,
-                  ),
-                ],
+                    if (cashBudget > 0 || cashTotal > 0)
+                      _buildBudgetProgress(
+                        context,
+                        label: 'Cash Spending',
+                        amount: cashTotal,
+                        budget: cashBudget > 0 ? cashBudget : (cashTotal > 0 ? cashTotal : 1),
+                        color: Colors.orange,
+                      ),
+                    if (cashBudget > 0 || cashTotal > 0)
+                      const SizedBox(height: 12),
+                    if (cardBudget > 0 || cardTotal > 0)
+                      _buildBudgetProgress(
+                        context,
+                        label: 'Card Spending',
+                        amount: cardTotal,
+                        budget: cardBudget > 0 ? cardBudget : (cardTotal > 0 ? cardTotal : 1),
+                        color: Colors.blue,
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        );
+            ],
+          );
+        });
       },
     );
   }

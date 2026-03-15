@@ -17,6 +17,7 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
   DateTime _selectedDate = DateTime.now();
   String _budgetType = 'method'; // 'overall', 'method', 'category'
   bool _enableRollover = false;
+  bool _hasInitializedRollover = false;
 
   @override
   Widget build(BuildContext context) {
@@ -94,10 +95,16 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
               ? budgetSnapshot.data!.data() as Map<String, dynamic>
               : <String, dynamic>{};
 
-          // Synchronize local state if needed (or prefer local state to drive UI)
-          // If you want to persist these settings, you should read/write them to Firestore.
-          // For now, I'll keep them effectively local or init from DB if present?
-          // Let's rely on local state but init from DB if we wanted perfectly persistent settings.
+          if (!_hasInitializedRollover) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+               if (mounted) {
+                 setState(() {
+                   _enableRollover = budgetData['enableRollover'] == true;
+                   _hasInitializedRollover = true;
+                 });
+               }
+            });
+          }
 
           // Read Budgets based on Type
           double overallBudget =
@@ -354,7 +361,20 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
             const Text('Rollover'),
             Switch(
               value: _enableRollover,
-              onChanged: (val) => setState(() => _enableRollover = val),
+              onChanged: (val) async {
+                setState(() => _enableRollover = val);
+                // Persist to Firestore
+                try {
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user!.uid)
+                      .collection('settings')
+                      .doc('budgets')
+                      .set({'enableRollover': val}, SetOptions(merge: true));
+                } catch (e) {
+                  debugPrint('Failed to save rollover preference: $e');
+                }
+              },
             ),
           ],
         ),

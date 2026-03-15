@@ -14,6 +14,7 @@ class ChartsScreen extends StatefulWidget {
 class _ChartsScreenState extends State<ChartsScreen> {
   String _pieChartFilter = 'Category'; // Category, Place, Payment Method
   final List<String> _filterOptions = ['Category', 'Place', 'Payment Method'];
+  DateTime _selectedMonth = DateTime.now();
 
   // Colors for charts
   final List<Color> _colors = [
@@ -81,6 +82,43 @@ class _ChartsScreenState extends State<ChartsScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: () {
+                    setState(() {
+                      _selectedMonth = DateTime(
+                        _selectedMonth.year,
+                        _selectedMonth.month - 1,
+                        1,
+                      );
+                    });
+                  },
+                ),
+                Text(
+                  DateFormat('MMMM yyyy').format(_selectedMonth),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: () {
+                    setState(() {
+                      _selectedMonth = DateTime(
+                        _selectedMonth.year,
+                        _selectedMonth.month + 1,
+                        1,
+                      );
+                    });
+                  },
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
             SizedBox(
               height: 300,
@@ -92,8 +130,16 @@ class _ChartsScreenState extends State<ChartsScreen> {
                     .where(
                       'date',
                       isGreaterThanOrEqualTo: DateTime(
-                        DateTime.now().year,
-                        DateTime.now().month,
+                        _selectedMonth.year,
+                        _selectedMonth.month,
+                        1,
+                      ),
+                    )
+                    .where(
+                      'date',
+                      isLessThan: DateTime(
+                        _selectedMonth.year,
+                        _selectedMonth.month + 1,
                         1,
                       ),
                     )

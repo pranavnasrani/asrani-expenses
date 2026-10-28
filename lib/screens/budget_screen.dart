@@ -103,7 +103,7 @@ class _BudgetScreenState extends State<BudgetScreen> {
                 ),
               SavedTier(summary: s, prefs: prefs),
               const SizedBox(height: 12),
-              FilledButton.tonalIcon(
+              FilledButton.icon(
                 onPressed: () => _editBudget(context, data),
                 icon: const Icon(Icons.edit_rounded),
                 label: Text('Edit ${prefs.view.label.toLowerCase()} budget'),

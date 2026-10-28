@@ -1,16 +1,33 @@
-# asrani_expenses
+# Asrani Expenses
 
-A new Flutter project.
+A family expense tracker for Android (Flutter + Firebase). Each family member signs in with Google and tracks their own spending in Singapore dollars.
 
-## Getting Started
+## Features
+- Log expenses by hand or by scanning a receipt (Gemini fills in title, amount, place, category and date).
+- Monthly budgets: overall, cash vs card/digital, or by category. Budgets repeat every month until changed.
+- Rollover: unspent money compounds month after month from the month you choose. Overspending is forgiven, never carried.
+- Search, category filters, edit, delete with Undo, CSV/PDF export.
+- Insights: breakdown by category, place or payment method, six-month trend, weekly AI note, and an AI assistant for questions.
+- Light and dark themes.
 
-This project is a starting point for a Flutter application.
+## Run
+```bash
+flutter pub get
+flutter run --dart-define=GEMINI_API_KEY=your_key
+```
 
-A few resources to get you started if this is your first Flutter project:
+Demo mode runs every screen on sample data with no sign-in (debug and profile builds only):
+```bash
+flutter run --dart-define=DEMO_MODE=true
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Test
+```bash
+flutter test
+```
+`test/budget_calculator_test.dart` covers the budget and rollover rules; `test/widget_test.dart` drives the screens against the in-memory demo repository.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Layout
+- `lib/logic/budget_calculator.dart`: pure budgeting and rollover rules.
+- `lib/data/`: `ExpenseRepository` with Firestore and demo implementations.
+- `lib/screens/`, `lib/widgets/`: UI. Design rules are in `DESIGN.md`; product context in `PRODUCT.md`.

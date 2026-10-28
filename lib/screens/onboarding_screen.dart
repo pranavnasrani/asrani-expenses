@@ -94,7 +94,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           width: 88,
                           height: 88,
                           decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(28)),
-                          child: Icon(p.icon, color: Colors.white, size: 44),
+                          child: Icon(p.icon, color: theme.colorScheme.surface, size: 44),
                         ),
                         const SizedBox(height: 32),
                         Text(p.title, style: theme.textTheme.displaySmall?.copyWith(height: 1.1)),

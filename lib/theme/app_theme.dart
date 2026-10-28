@@ -217,7 +217,14 @@ class AppTheme {
 
   static ThemeData _build(ColorScheme scheme, Enamel enamel) {
     final base = ThemeData(useMaterial3: true, colorScheme: scheme);
-    final text = GoogleFonts.figtreeTextTheme(base.textTheme).apply(
+    final isDark = scheme.brightness == Brightness.dark;
+    // Start from Material's sized type scale. ThemeData.textTheme carries no
+    // sizes until Theme.of merges them in, which component themes such as
+    // AppBarTheme.titleTextStyle never get.
+    final sized = Typography.englishLike2021.merge(
+      isDark ? Typography.whiteMountainView : Typography.blackMountainView,
+    );
+    final text = GoogleFonts.figtreeTextTheme(sized).apply(
       bodyColor: scheme.onSurface,
       displayColor: scheme.onSurface,
     );
@@ -239,7 +246,6 @@ class AppTheme {
       labelLarge: text.labelLarge?.copyWith(fontWeight: FontWeight.w700),
       labelMedium: text.labelMedium?.copyWith(fontWeight: FontWeight.w600),
     );
-    final isDark = scheme.brightness == Brightness.dark;
     final fieldShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(14),
     );
@@ -329,6 +335,8 @@ class AppTheme {
         ),
       ),
       chipTheme: ChipThemeData(
+        selectedColor: scheme.primaryContainer,
+        secondaryLabelStyle: textTheme.labelLarge?.copyWith(color: scheme.onPrimaryContainer),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         side: BorderSide(color: scheme.outlineVariant),
         labelStyle: textTheme.labelLarge,

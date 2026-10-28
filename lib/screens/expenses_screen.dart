@@ -1,13 +1,16 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert';
-import '../utils/category_utils.dart';
-import '../widgets/shimmer_loading.dart';
+
+import '../data/expense_repository.dart';
+import '../models/budget.dart';
+import '../models/expense.dart';
 import '../services/export_service.dart';
-import '../services/feedback_service.dart';
+import '../services/gemini_service.dart';
+import '../theme/app_theme.dart';
+import '../utils/money.dart';
+import '../widgets/common.dart';
 import 'chat_screen.dart';
+import 'expense_form_screen.dart';
 
 class ExpensesScreen extends StatefulWidget {
   const ExpensesScreen({super.key});
@@ -17,719 +20,271 @@ class ExpensesScreen extends StatefulWidget {
 }
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
-  final user = FirebaseAuth.instance.currentUser;
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
+  final _search = TextEditingController();
+  String _query = '';
+  String? _category;
+  Stream<List<Expense>>? _stream;
+  Stream<List<String>>? _categories;
+  List<Expense> _visible = const [];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _stream ??= context.repo.watchExpenses();
+    _categories ??= context.repo.watchCategories();
+  }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _search.dispose();
     super.dispose();
   }
 
-  Future<void> _deleteExpense(String id) async {
-    if (user == null) return;
+  bool _matches(Expense e) {
+    if (_category != null && e.category != _category) return false;
+    if (_query.isEmpty) return true;
+    final q = _query.toLowerCase();
+    return e.title.toLowerCase().contains(q) ||
+        e.place.toLowerCase().contains(q) ||
+        e.category.toLowerCase().contains(q) ||
+        e.paymentMethod.toLowerCase().contains(q) ||
+        e.amount.toStringAsFixed(2).contains(q);
+  }
 
-    // Added UX protection confirmation dialog
-    bool confirm =
-        await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Delete Expense?'),
-            content: const Text('This action cannot be undone.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+  String get _filterLabel {
+    final parts = [
+      if (_category != null) _category!,
+      if (_query.isNotEmpty) '"$_query"',
+    ];
+    return parts.isEmpty ? 'All expenses' : parts.join(' ');
+  }
+
+  Future<void> _export(bool pdf) async {
+    final list = _visible;
+    try {
+      if (pdf) {
+        await ExportService().exportPdf(list, label: _filterLabel);
+      } else {
+        await ExportService().exportCsv(list, label: _filterLabel);
+      }
+    } catch (e) {
+      if (mounted) showMessage(context, 'Export failed: $e', error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Expenses'),
+        actions: [
+          PopupMenuButton<bool>(
+            tooltip: 'Export',
+            icon: const Icon(Icons.ios_share_rounded),
+            onSelected: _export,
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: false, child: Text('Export shown as CSV')),
+              PopupMenuItem(value: true, child: Text('Export shown as PDF')),
+            ],
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(116),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: SearchBar(
+                  controller: _search,
+                  hintText: 'Search title, place, amount…',
+                  leading: const Icon(Icons.search_rounded),
+                  elevation: const WidgetStatePropertyAll(0),
+                  backgroundColor: WidgetStatePropertyAll(theme.colorScheme.surfaceContainerHigh),
+                  shape: WidgetStatePropertyAll(
+                    RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  trailing: [
+                    if (_query.isNotEmpty)
+                      IconButton(
+                        tooltip: 'Clear search',
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () {
+                          _search.clear();
+                          setState(() => _query = '');
+                        },
+                      ),
+                  ],
+                  onChanged: (v) => setState(() => _query = v.trim()),
+                ),
               ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text(
-                  'Delete',
-                  style: TextStyle(color: Colors.red),
+              SizedBox(
+                height: 48,
+                child: StreamBuilder<List<String>>(
+                  stream: _categories,
+                  builder: (context, snap) {
+                    final cats = snap.data ?? kDefaultCategories;
+                    return ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      children: [
+                        for (final c in [null, ...cats])
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8, bottom: 8),
+                            child: ChoiceChip(
+                              label: Text(c ?? 'All'),
+                              selected: _category == c,
+                              showCheckmark: false,
+                              onSelected: (_) => setState(() => _category = c),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ],
           ),
-        ) ??
-        false;
+        ),
+      ),
+      body: StreamBuilder<List<Expense>>(
+        stream: _stream,
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return EmptyState(
+              icon: Icons.cloud_off_rounded,
+              title: "Couldn't load expenses",
+              message: '${snap.error}',
+            );
+          }
+          if (!snap.hasData) return const ExpenseListSkeleton();
+          final all = snap.data!;
+          final list = all.where(_matches).toList();
+          _visible = list;
 
-    if (!confirm) return;
-
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user!.uid)
-        .collection('expenses')
-        .doc(id)
-        .delete();
-  }
-
-  Future<void> _showEditDialog(DocumentSnapshot doc) async {
-    if (user == null) return;
-    final data = doc.data() as Map<String, dynamic>;
-
-    final titleController = TextEditingController(
-      text: data['title']?.toString() ?? '',
-    );
-    final amountController = TextEditingController(
-      text: (data['amount'] as num?)?.toString() ?? '0',
-    );
-    final placeController = TextEditingController(
-      text: data['place']?.toString() ?? '',
-    );
-
-    String selectedCategory = data['category']?.toString() ?? 'Other';
-    String selectedPaymentMethod = data['paymentMethod'] ?? 'Cash';
-    List<String> categories = [
-      'Food',
-      'Transport',
-      'Shopping',
-      'Entertainment',
-      'Bills',
-      'Other',
-    ];
-    final List<String> paymentMethods = [
-      'Cash',
-      'Credit Card',
-      'Debit Card',
-      'PayNow',
-      'Other',
-    ];
-
-    try {
-      final catDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .collection('settings')
-          .doc('categories')
-          .get();
-      if (catDoc.exists &&
-          catDoc.data() != null &&
-          catDoc.data()!.containsKey('list')) {
-        categories = List<String>.from(catDoc.data()!['list']);
-      }
-    } catch (e) {
-      debugPrint('Error fetching categories: $e');
-    }
-
-    if (!categories.contains(selectedCategory)) {
-      categories.add(selectedCategory);
-    }
-
-    if (!mounted) return;
-
-    await showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) {
-          return AlertDialog(
-            title: const Text('Edit Expense'),
-            content: SizedBox(
-              // Explicit width/height sizing bounds to prevent overflow crashes
-              width: double.maxFinite,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(labelText: 'Title'),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: amountController,
-                      decoration: const InputDecoration(labelText: 'Amount'),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
+          if (all.isEmpty) {
+            return const EmptyState(
+              icon: Icons.receipt_long_rounded,
+              title: 'No expenses yet',
+              message: 'Everything you log appears here, newest first.',
+            );
+          }
+          if (list.isEmpty) {
+            return EmptyState(
+              icon: Icons.search_off_rounded,
+              title: 'No matches',
+              message: 'Nothing matches $_filterLabel.',
+              action: GeminiService.isConfigured && _query.isNotEmpty
+                  ? OutlinedButton.icon(
+                      icon: const Icon(Icons.auto_awesome_rounded),
+                      label: const Text('Ask the assistant'),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ChatScreen(initialQuery: 'Find expenses related to "$_query"'),
+                        ),
                       ),
+                    )
+                  : TextButton(
+                      onPressed: () {
+                        _search.clear();
+                        setState(() {
+                          _query = '';
+                          _category = null;
+                        });
+                      },
+                      child: const Text('Clear filters'),
                     ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: placeController,
-                      decoration: const InputDecoration(labelText: 'Place'),
+            );
+          }
+
+          final groups = <MonthKey, List<Expense>>{};
+          for (final e in list) {
+            groups.putIfAbsent(MonthKey.of(e.date), () => []).add(e);
+          }
+          return CustomScrollView(
+            slivers: [
+              for (final entry in groups.entries)
+                SliverMainAxisGroup(
+                  slivers: [
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _MonthHeader(entry.key, entry.value),
                     ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: selectedCategory,
-                      decoration: const InputDecoration(labelText: 'Category'),
-                      items: categories.map((c) {
-                        return DropdownMenuItem(
-                          value: c,
-                          child: Row(
-                            children: [
-                              Icon(
-                                CategoryUtils.getIconForCategory(c),
-                                size: 18,
-                                color: CategoryUtils.getColorForCategory(c),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(c),
-                            ],
+                    SliverList.builder(
+                      itemCount: entry.value.length,
+                      itemBuilder: (context, i) {
+                        final e = entry.value[i];
+                        return Dismissible(
+                          key: ValueKey(e.id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            color: theme.colorScheme.errorContainer,
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 24),
+                            child: Icon(Icons.delete_rounded, color: theme.colorScheme.onErrorContainer),
                           ),
+                          onDismissed: (_) => deleteWithUndo(context, e),
+                          child: ExpenseTile(expense: e, onTap: () => openExpenseEditor(context, e)),
                         );
-                      }).toList(),
-                      onChanged: (value) =>
-                          setState(() => selectedCategory = value!),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: selectedPaymentMethod,
-                      decoration: const InputDecoration(
-                        labelText: 'Payment Method',
-                      ),
-                      items: paymentMethods
-                          .map(
-                            (m) => DropdownMenuItem(value: m, child: Text(m)),
-                          )
-                          .toList(),
-                      onChanged: (value) =>
-                          setState(() => selectedPaymentMethod = value!),
+                      },
                     ),
                   ],
                 ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  // Explicit cleanup of ephemeral state controllers on dialog dismissal
-                  titleController.dispose();
-                  amountController.dispose();
-                  placeController.dispose();
-                  Navigator.pop(context);
-                },
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  final newTitle = titleController.text.trim();
-                  final newAmount = double.tryParse(
-                    amountController.text.trim(),
-                  );
-                  final newPlace = placeController.text.trim();
-
-                  if (newTitle.isNotEmpty && newAmount != null) {
-                    await FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(user!.uid)
-                        .collection('expenses')
-                        .doc(doc.id)
-                        .update({
-                          'title': newTitle,
-                          'amount': newAmount,
-                          'place': newPlace,
-                          'category': selectedCategory,
-                          'paymentMethod': selectedPaymentMethod,
-                        });
-                    titleController.dispose();
-                    amountController.dispose();
-                    placeController.dispose();
-                    if (context.mounted) Navigator.pop(context);
-                  }
-                },
-                child: const Text('Save'),
-              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 96)),
             ],
           );
         },
       ),
     );
   }
+}
 
-  void _showReceiptPreview(String imageUrl, String title) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              constraints: const BoxConstraints(maxHeight: 600, maxWidth: 400),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AppBar(
-                    title: Text(
-                      title,
-                      style: const TextStyle(fontSize: 16),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    leading: IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ),
-                  Flexible(
-                    child: InteractiveViewer(
-                      child: _buildImageWidget(imageUrl, fit: BoxFit.contain),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+/// Sticky guide header naming the month in view and its total.
+class _MonthHeader extends SliverPersistentHeaderDelegate {
+  final MonthKey month;
+  final List<Expense> expenses;
 
-  void _showExportOptions(BuildContext context) {
-    final exportService = ExportService();
-    final feedback = FeedbackService();
+  _MonthHeader(this.month, this.expenses);
 
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Export Expenses',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+  @override
+  double get minExtent => 44;
+  @override
+  double get maxExtent => 44;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final theme = Theme.of(context);
+    final total = expenses.fold<double>(0, (s, e) => s + e.amount);
+    final now = DateTime.now();
+    return Container(
+      color: theme.colorScheme.surfaceContainer,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      alignment: Alignment.centerLeft,
+      child: Row(
+        children: [
+          Flexible(
+            child: Text(
+              DateFormat(month.year == now.year ? 'MMMM' : 'MMMM y').format(month.start),
+              style: theme.textTheme.titleSmall,
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Choose a format to export your expense data',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${expenses.length} ${expenses.length == 1 ? 'expense' : 'expenses'}',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 24),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.table_chart, color: Colors.green),
-              ),
-              title: const Text('Export as CSV'),
-              subtitle: const Text('For spreadsheets like Excel'),
-              onTap: () async {
-                Navigator.pop(context);
-                await feedback.tapFeedback();
-                try {
-                  await exportService.exportToCSV();
-                  await feedback.successFeedback();
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Export failed: $e')),
-                    );
-                  }
-                }
-              },
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.picture_as_pdf, color: Colors.red),
-              ),
-              title: const Text('Export as PDF'),
-              subtitle: const Text('Formatted expense report'),
-              onTap: () async {
-                Navigator.pop(context);
-                await feedback.tapFeedback();
-                try {
-                  await exportService.exportToPDF();
-                  await feedback.successFeedback();
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Export failed: $e')),
-                    );
-                  }
-                }
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          Text(Money.format(total), style: theme.textTheme.titleSmall?.copyWith(fontFeatures: tabular)),
+        ],
       ),
     );
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (user == null) return const Center(child: Text('Please log in'));
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Search expenses, places...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _searchQuery = '');
-                      },
-                    )
-                  : null,
-              filled: true,
-              fillColor: Theme.of(
-                context,
-              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 0),
-            ),
-            onChanged: (value) =>
-                setState(() => _searchQuery = value.toLowerCase()),
-          ),
-        ),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(user!.uid)
-                .collection('expenses')
-                .orderBy('date', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError)
-                return const Center(child: Text('Something went wrong'));
-              if (snapshot.connectionState == ConnectionState.waiting)
-                return const ExpenseListShimmer();
-
-              final allDocs = snapshot.data?.docs ?? [];
-              final filteredDocs = allDocs.where((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                final title = (data['title'] ?? '').toString().toLowerCase();
-                final place = (data['place'] ?? '').toString().toLowerCase();
-                final category = (data['category'] ?? '')
-                    .toString()
-                    .toLowerCase();
-
-                return title.contains(_searchQuery) ||
-                    place.contains(_searchQuery) ||
-                    category.contains(_searchQuery);
-              }).toList();
-
-              if (filteredDocs.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.search_off,
-                        size: 64,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _searchQuery.isEmpty
-                            ? 'No expenses yet'
-                            : 'No results for "$_searchQuery"',
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 16,
-                        ),
-                      ),
-                      if (_searchQuery.isNotEmpty) ...[
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          icon: const Icon(Icons.auto_awesome),
-                          label: const Text('Search with AI'),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ChatScreen(
-                                  initialQuery:
-                                      'Find expenses related to "$_searchQuery"',
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: filteredDocs.length,
-                itemBuilder: (context, index) {
-                  final doc = filteredDocs[index];
-                  final data = doc.data() as Map<String, dynamic>;
-
-                  String date;
-                  try {
-                    if (data['date'] is Timestamp) {
-                      date = DateFormat(
-                        'MMM d, yyyy',
-                      ).format((data['date'] as Timestamp).toDate());
-                    } else if (data['date'] is String) {
-                      date = DateFormat(
-                        'MMM d, yyyy',
-                      ).format(DateTime.parse(data['date'] as String));
-                    } else {
-                      date = 'Unknown date';
-                    }
-                  } catch (e) {
-                    date = 'Invalid date';
-                  }
-
-                  final category = data['category'] ?? 'Other';
-                  final place = data['place'] ?? '';
-                  final title = data['title']?.toString() ?? 'Untitled';
-                  final amount = (data['amount'] as num?)?.toDouble() ?? 0.0;
-                  final imageUrl = data['imageUrl']?.toString();
-
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: BorderSide(
-                        color: Colors.grey.withValues(alpha: 0.1),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '\$${amount.toStringAsFixed(2)}',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          color: Theme.of(context).primaryColor,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.calendar_today,
-                                    size: 14,
-                                    color: Colors.grey[600],
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    date,
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: CategoryUtils.getColorForCategory(
-                                        category,
-                                      ).withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color:
-                                            CategoryUtils.getColorForCategory(
-                                              category,
-                                            ).withValues(alpha: 0.2),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          CategoryUtils.getIconForCategory(
-                                            category,
-                                          ),
-                                          size: 14,
-                                          color:
-                                              CategoryUtils.getColorForCategory(
-                                                category,
-                                              ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          category,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color:
-                                                CategoryUtils.getColorForCategory(
-                                                  category,
-                                                ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (place.isNotEmpty) ...[
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.location_on_outlined,
-                                      size: 14,
-                                      color: Colors.grey[600],
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        place,
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: 14,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const Divider(height: 1),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8.0,
-                            vertical: 4.0,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              TextButton.icon(
-                                icon: const Icon(Icons.edit, size: 18),
-                                label: const Text('Edit'),
-                                onPressed: () => _showEditDialog(doc),
-                              ),
-                              const SizedBox(width: 8),
-                              TextButton.icon(
-                                icon: const Icon(
-                                  Icons.delete,
-                                  size: 18,
-                                  color: Colors.red,
-                                ),
-                                label: const Text(
-                                  'Delete',
-                                  style: TextStyle(color: Colors.red),
-                                ),
-                                onPressed: () => _deleteExpense(doc.id),
-                              ),
-                              if (imageUrl != null && imageUrl.isNotEmpty) ...[
-                                const SizedBox(width: 8),
-                                TextButton.icon(
-                                  icon: const Icon(Icons.receipt, size: 18),
-                                  label: const Text('Receipt'),
-                                  onPressed: () =>
-                                      _showReceiptPreview(imageUrl, title),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            }, // StreamBuilder builder argument closure
-          ), // StreamBuilder closure
-        ), // Expanded closure
-      ], // Column children closure
-    );
-  }
-
-  Widget _buildImageWidget(String imageUrl, {BoxFit fit = BoxFit.cover}) {
-    if (imageUrl.startsWith('data:image')) {
-      try {
-        final base64String = imageUrl.split(',').last;
-        final bytes = base64Decode(base64String);
-        return Image.memory(
-          bytes,
-          fit: fit,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              color: Colors.grey[300],
-              child: const Icon(Icons.broken_image, size: 50),
-            );
-          },
-        );
-      } catch (e) {
-        return Container(
-          color: Colors.grey[300],
-          child: const Icon(Icons.broken_image, size: 50),
-        );
-      }
-    }
-
-    return Image.network(
-      imageUrl,
-      fit: fit,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return const Center(child: CircularProgressIndicator());
-      },
-      errorBuilder: (context, error, stackTrace) {
-        return Container(
-          color: Colors.grey[300],
-          child: const Icon(Icons.broken_image, size: 50),
-        );
-      },
-    );
-  }
+  bool shouldRebuild(_MonthHeader old) =>
+      old.month != month || old.expenses != expenses;
 }

@@ -70,3 +70,6 @@ coverage/
 
 # Env
 .env*
+
+# Impeccable decision-page scratch
+.impeccable/mocks/

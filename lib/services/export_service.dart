@@ -1,8 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:csv/csv.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
@@ -11,116 +10,82 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../models/expense.dart';
+import '../utils/money.dart';
+
 class ExportService {
-  /// Export expenses to CSV format
-  Future<void> exportToCSV({DateTime? startDate, DateTime? endDate}) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception('User not logged in');
+  static final _stamp = DateFormat('yyyyMMdd_HHmm');
 
-    // Fetch expenses
-    Query query = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('expenses')
-        .orderBy('date', descending: true);
-
-    if (startDate != null) {
-      query = query.where('date', isGreaterThanOrEqualTo: startDate);
-    }
-    if (endDate != null) {
-      query = query.where('date', isLessThanOrEqualTo: endDate);
-    }
-
-    final snapshot = await query.get();
-    final expenses = snapshot.docs;
-
-    if (expenses.isEmpty) {
-      throw Exception('No expenses to export');
-    }
-
-    // Create CSV data
-    List<List<dynamic>> rows = [
-      ['Title', 'Amount', 'Date', 'Category', 'Payment Method', 'Place'],
-    ];
-
-    for (var doc in expenses) {
-      final data = doc.data() as Map<String, dynamic>;
-      final date = _parseDate(data['date']);
-
-      rows.add([
-        data['title'] ?? 'Untitled',
-        data['amount']?.toString() ?? '0',
-        date != null ? DateFormat('yyyy-MM-dd').format(date) : 'N/A',
-        data['category'] ?? 'Other',
-        data['paymentMethod'] ?? 'Cash',
-        data['place'] ?? '',
-      ]);
-    }
-
-    final csvString = const ListToCsvConverter().convert(rows);
-
+  Future<void> _shareBytes(Uint8List bytes, String name, String mime) async {
     if (kIsWeb) {
-      // For web, use share_plus which handles downloads
-      await Share.share(csvString, subject: 'Expenses Export');
-    } else {
-      // For mobile, save and share file
-      final directory = await getApplicationDocumentsDirectory();
-      final fileName =
-          'expenses_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv';
-      final file = File('${directory.path}/$fileName');
-      await file.writeAsString(csvString);
-
-      await Share.shareXFiles([XFile(file.path)], subject: 'Expenses Export');
+      await Share.shareXFiles([
+        XFile.fromData(bytes, name: name, mimeType: mime),
+      ], subject: 'Asrani Expenses export');
+      return;
     }
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$name');
+    await file.writeAsBytes(bytes);
+    await Share.shareXFiles([
+      XFile(file.path, mimeType: mime),
+    ], subject: 'Asrani Expenses export');
   }
 
-  /// Export expenses to PDF format
-  Future<void> exportToPDF({DateTime? startDate, DateTime? endDate}) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception('User not logged in');
+  Future<void> exportCsv(List<Expense> expenses, {required String label}) async {
+    if (expenses.isEmpty) throw StateError('There are no expenses to export.');
+    final rows = <List<dynamic>>[
+      ['Date', 'Title', 'Amount (SGD)', 'Category', 'Payment method', 'Place'],
+      for (final e in expenses)
+        [
+          DateFormat('yyyy-MM-dd').format(e.date),
+          e.title,
+          e.amount.toStringAsFixed(2),
+          e.category,
+          e.paymentMethod,
+          e.place,
+        ],
+    ];
+    final csv = const ListToCsvConverter().convert(rows);
+    await _shareBytes(
+      Uint8List.fromList(utf8.encode(csv)),
+      'expenses_${_slug(label)}_${_stamp.format(DateTime.now())}.csv',
+      'text/csv',
+    );
+  }
 
-    // Fetch expenses
-    Query query = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('expenses')
-        .orderBy('date', descending: true);
-
-    if (startDate != null) {
-      query = query.where('date', isGreaterThanOrEqualTo: startDate);
+  Future<void> exportPdf(List<Expense> expenses, {required String label}) async {
+    if (expenses.isEmpty) throw StateError('There are no expenses to export.');
+    final total = expenses.fold<double>(0, (s, e) => s + e.amount);
+    final byCategory = <String, double>{};
+    final byMethod = <String, double>{};
+    for (final e in expenses) {
+      byCategory[e.category] = (byCategory[e.category] ?? 0) + e.amount;
+      byMethod[e.paymentMethod] = (byMethod[e.paymentMethod] ?? 0) + e.amount;
     }
-    if (endDate != null) {
-      query = query.where('date', isLessThanOrEqualTo: endDate);
+    final jade = PdfColor.fromInt(0xFF1E6F66);
+
+    pw.Widget totals(String title, Map<String, double> map) {
+      final entries = map.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      return pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(title, style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 6),
+          for (final e in entries)
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(vertical: 2),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [pw.Text(e.key), pw.Text(Money.format(e.value))],
+              ),
+            ),
+        ],
+      );
     }
 
-    final snapshot = await query.get();
-    final expenses = snapshot.docs;
-
-    if (expenses.isEmpty) {
-      throw Exception('No expenses to export');
-    }
-
-    // Calculate totals
-    double totalAmount = 0;
-    Map<String, double> categoryTotals = {};
-    Map<String, double> paymentMethodTotals = {};
-
-    for (var doc in expenses) {
-      final data = doc.data() as Map<String, dynamic>;
-      final amount = (data['amount'] as num?)?.toDouble() ?? 0;
-      final category = data['category'] ?? 'Other';
-      final paymentMethod = data['paymentMethod'] ?? 'Cash';
-
-      totalAmount += amount;
-      categoryTotals[category] = (categoryTotals[category] ?? 0) + amount;
-      paymentMethodTotals[paymentMethod] =
-          (paymentMethodTotals[paymentMethod] ?? 0) + amount;
-    }
-
-    // Create PDF
-    final pdf = pw.Document();
-
-    pdf.addPage(
+    final doc = pw.Document();
+    doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
@@ -128,156 +93,78 @@ class ExportService {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              'Expense Report',
-              style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
+              'Asrani Expenses: $label',
+              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: jade),
             ),
-            pw.SizedBox(height: 4),
+            pw.SizedBox(height: 2),
             pw.Text(
-              'Generated on ${DateFormat('MMMM d, yyyy').format(DateTime.now())}',
+              'Generated ${DateFormat('d MMMM y').format(DateTime.now())}',
               style: const pw.TextStyle(color: PdfColors.grey700),
             ),
-            if (startDate != null || endDate != null)
-              pw.Text(
-                'Period: ${startDate != null ? DateFormat('MMM d').format(startDate) : 'All'} - ${endDate != null ? DateFormat('MMM d, yyyy').format(endDate) : 'Present'}',
-                style: const pw.TextStyle(color: PdfColors.grey700),
-              ),
-            pw.SizedBox(height: 16),
-            pw.Divider(),
-            pw.SizedBox(height: 16),
+            pw.SizedBox(height: 12),
           ],
         ),
         build: (context) => [
-          // Summary Section
           pw.Container(
-            padding: const pw.EdgeInsets.all(16),
+            padding: const pw.EdgeInsets.all(14),
             decoration: pw.BoxDecoration(
-              color: PdfColors.blue50,
+              color: PdfColor.fromInt(0xFFE6F2EF),
               borderRadius: pw.BorderRadius.circular(8),
             ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
+                pw.Text('${expenses.length} expenses'),
                 pw.Text(
-                  'Summary',
-                  style: pw.TextStyle(
-                    fontSize: 18,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.SizedBox(height: 12),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Total Expenses:'),
-                    pw.Text(
-                      '\$${totalAmount.toStringAsFixed(2)}',
-                      style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 4),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Number of Transactions:'),
-                    pw.Text('${expenses.length}'),
-                  ],
+                  Money.format(total),
+                  style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
                 ),
               ],
             ),
           ),
-          pw.SizedBox(height: 24),
-
-          // Category Breakdown
-          pw.Text(
-            'By Category',
-            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          pw.SizedBox(height: 18),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(child: totals('By category', byCategory)),
+              pw.SizedBox(width: 24),
+              pw.Expanded(child: totals('By payment method', byMethod)),
+            ],
           ),
-          pw.SizedBox(height: 8),
-          ...categoryTotals.entries.map(
-            (e) => pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(vertical: 2),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(e.key),
-                  pw.Text('\$${e.value.toStringAsFixed(2)}'),
-                ],
-              ),
-            ),
-          ),
-          pw.SizedBox(height: 16),
-
-          // Payment Method Breakdown
-          pw.Text(
-            'By Payment Method',
-            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 8),
-          ...paymentMethodTotals.entries.map(
-            (e) => pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(vertical: 2),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(e.key),
-                  pw.Text('\$${e.value.toStringAsFixed(2)}'),
-                ],
-              ),
-            ),
-          ),
-          pw.SizedBox(height: 24),
-
-          // Expense List
-          pw.Text(
-            'All Expenses',
-            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 8),
+          pw.SizedBox(height: 18),
           pw.TableHelper.fromTextArray(
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
-            cellPadding: const pw.EdgeInsets.all(8),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+            headerDecoration: pw.BoxDecoration(color: jade),
+            cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
             cellAlignments: {
               0: pw.Alignment.centerLeft,
-              1: pw.Alignment.centerRight,
-              2: pw.Alignment.center,
-              3: pw.Alignment.center,
+              1: pw.Alignment.centerLeft,
+              2: pw.Alignment.centerLeft,
+              3: pw.Alignment.centerLeft,
+              4: pw.Alignment.centerRight,
             },
-            headers: ['Title', 'Amount', 'Date', 'Category'],
-            data: expenses.map((doc) {
-              final data = doc.data() as Map<String, dynamic>;
-              final date = _parseDate(data['date']);
-              return [
-                data['title'] ?? 'Untitled',
-                '\$${(data['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
-                date != null ? DateFormat('MMM d').format(date) : 'N/A',
-                data['category'] ?? 'Other',
-              ];
-            }).toList(),
+            headers: ['Date', 'Title', 'Category', 'Method', 'Amount'],
+            data: [
+              for (final e in expenses)
+                [
+                  DateFormat('d MMM').format(e.date),
+                  e.title,
+                  e.category,
+                  e.paymentMethod,
+                  Money.format(e.amount),
+                ],
+            ],
           ),
         ],
       ),
     );
 
-    // Share or print PDF
     await Printing.sharePdf(
-      bytes: await pdf.save(),
-      filename:
-          'expense_report_${DateFormat('yyyyMMdd').format(DateTime.now())}.pdf',
+      bytes: await doc.save(),
+      filename: 'expenses_${_slug(label)}_${_stamp.format(DateTime.now())}.pdf',
     );
   }
 
-  DateTime? _parseDate(dynamic date) {
-    if (date is Timestamp) {
-      return date.toDate();
-    } else if (date is String) {
-      try {
-        return DateTime.parse(date);
-      } catch (e) {
-        return null;
-      }
-    }
-    return null;
-  }
+  static String _slug(String s) =>
+      s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_').replaceAll(RegExp(r'^_|_$'), '');
 }

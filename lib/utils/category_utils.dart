@@ -1,69 +1,86 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 class CategoryUtils {
-  static IconData getIconForCategory(String category) {
+  static IconData iconFor(String category) {
     switch (category.toLowerCase()) {
       case 'food':
       case 'dining':
       case 'restaurant':
-        return Icons.restaurant;
-      case 'shopping':
+        return Icons.ramen_dining_rounded;
       case 'groceries':
-        return Icons.shopping_bag;
+        return Icons.local_grocery_store_rounded;
+      case 'shopping':
+        return Icons.shopping_bag_rounded;
       case 'transport':
       case 'travel':
       case 'taxi':
       case 'petrol':
-        return Icons.directions_car;
+        return Icons.directions_transit_rounded;
       case 'entertainment':
       case 'movies':
       case 'fun':
-        return Icons.movie;
+        return Icons.local_activity_rounded;
       case 'bills':
       case 'utilities':
       case 'rent':
-        return Icons.receipt_long;
+        return Icons.receipt_long_rounded;
       case 'health':
       case 'medical':
       case 'pharmacy':
-        return Icons.medical_services;
+        return Icons.medical_services_rounded;
       case 'education':
       case 'books':
-        return Icons.school;
-      case 'salary':
-      case 'income':
-        return Icons.payments;
-      case 'investment':
-      case 'stocks':
-        return Icons.trending_up;
-      case 'other':
+        return Icons.school_rounded;
+      case 'gifts':
+      case 'family':
+        return Icons.redeem_rounded;
       default:
-        return Icons.category;
+        return Icons.category_rounded;
     }
   }
 
-  static Color getColorForCategory(String category) {
+  /// One enamel colour per category, used identically in tiers, rows and
+  /// charts. Unknown categories get a stable colour from their name.
+  static Color colorFor(BuildContext context, String category) {
+    final e = context.enamel;
     switch (category.toLowerCase()) {
       case 'food':
-        return Colors.orange;
-      case 'shopping':
-        return Colors.pink;
+        return e.tangerine;
+      case 'groceries':
+        return e.leaf;
       case 'transport':
-        return Colors.blue;
-      case 'entertainment':
-        return Colors.purple;
+        return e.cobalt;
+      case 'shopping':
+        return e.coral;
       case 'bills':
-        return Colors.red;
+        return e.plum;
+      case 'entertainment':
+        return e.teal;
       case 'health':
-        return Colors.green;
+        return e.rose;
       case 'education':
-        return Colors.teal;
-      case 'salary':
-        return Colors.lightGreen;
-      case 'investment':
-        return Colors.indigo;
+        return e.ochre;
+      case 'other':
+        return e.slate;
+    }
+    final cycle = e.categoryCycle;
+    final hash = category.toLowerCase().codeUnits.fold<int>(0, (h, c) => (h * 31 + c) & 0x7fffffff);
+    return cycle[hash % cycle.length];
+  }
+
+  static IconData iconForMethod(String method) {
+    switch (method.toLowerCase()) {
+      case 'cash':
+        return Icons.payments_rounded;
+      case 'paynow':
+        return Icons.qr_code_2_rounded;
+      case 'credit card':
+      case 'debit card':
+        return Icons.credit_card_rounded;
       default:
-        return Colors.grey;
+        return Icons.account_balance_wallet_rounded;
     }
   }
 }

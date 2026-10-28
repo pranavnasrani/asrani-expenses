@@ -1,8 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:intl/intl.dart';
+
+import '../data/expense_repository.dart';
 import '../services/gemini_service.dart';
+import '../utils/money.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? initialQuery;
@@ -13,366 +15,215 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
+class _Message {
+  final String text;
+  final bool fromUser;
+  const _Message(this.text, this.fromUser);
+}
+
 class _ChatScreenState extends State<ChatScreen> {
-  final TextEditingController _controller = TextEditingController();
-  final List<Message> _messages = [];
-  bool _isLoading = false;
-  final GeminiService _geminiService = GeminiService();
-  final ScrollController _scrollController = ScrollController();
+  static const _suggestions = [
+    'How much did I spend on food this month?',
+    'What were my biggest expenses last month?',
+    'Cash or card: which did I use more this month?',
+  ];
+
+  final _input = TextEditingController();
+  final _scroll = ScrollController();
+  final _messages = <_Message>[];
+  final _gemini = GeminiService();
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    // Add initial welcome message
-    _addMessage(
-      Message(
-        text:
-            "Hi! I'm your AI Financial Assistant. 🤖\nAsk me things like:\n\n• \"How much did I spend on food this month?\"\n• \"What are my biggest expenses?\"\n• \"Did I spend more on transport or shopping?\"",
-        isUser: false,
-      ),
-    );
-
-    // Handle initial query if provided
     if (widget.initialQuery != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _handleSubmitted(widget.initialQuery!);
-      });
-    }
-  }
-
-  void _addMessage(Message message) {
-    setState(() {
-      _messages.add(message);
-    });
-    // Scroll to bottom
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  Future<void> _handleSubmitted(String text) async {
-    if (text.trim().isEmpty) return;
-
-    _controller.clear();
-    _addMessage(Message(text: text, isUser: true));
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        _addMessage(
-          Message(text: "Please log in to use this feature.", isUser: false),
-        );
-        return;
-      }
-
-      // 1. Parse Intent (RAG Step 1)
-      final filters = await _geminiService.parseQuery(text);
-
-      // 2. Fetch Data (RAG Step 2)
-      Query query = FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('expenses');
-
-      // Apply Date Filters
-      if (filters['startDate'] != null) {
-        try {
-          final start = DateTime.parse(filters['startDate']!);
-          query = query.where(
-            'date',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(start),
-          );
-          // Also handle String dates if legacy data exists?
-          // For simplicity, assuming new queries mainly target properly timestamped data
-          // or we rely on the fact that existing logic handles mixed types.
-          // Firestore 'where' on mixed types is tricky.
-          // Let's assume standard flow for extensive data.
-          // Actually, the app uses `Timestamp` mostly now.
-        } catch (e) {
-          debugPrint("Date parse error: $e");
-        }
-      }
-
-      // Fetch
-      // We can't easily do complex AND queries on multiple fields without indexes.
-      // So we fetch by date (most reliable) and filter the rest in memory.
-      final snapshot = await query.get();
-      final docs = snapshot.docs;
-
-      // In-memory filter for Category/PaymentMethod & EndDate
-      List<Map<String, dynamic>> relevantExpenses = [];
-
-      for (var doc in docs) {
-        final data = doc.data() as Map<String, dynamic>;
-
-        // Date Filter (End Date)
-        if (filters['endDate'] != null) {
-          // ... check end date
-        }
-
-        // Category Filter
-        if (filters['category'] != null) {
-          if (data['category'] != filters['category']) continue;
-        }
-
-        // Payment Method Filter
-        if (filters['paymentMethod'] != null) {
-          if (data['paymentMethod'] != filters['paymentMethod']) continue;
-        }
-
-        relevantExpenses.add({
-          'title': data['title'],
-          'amount': data['amount'],
-          'date': data['date'].toString(), // Simplified
-          'category': data['category'],
-          'place': data['place'],
-        });
-      }
-
-      // 3. Generate Answer (RAG Step 3)
-      String summary = "Found ${relevantExpenses.length} expenses:\n";
-      if (relevantExpenses.isEmpty) {
-        summary = "No expenses found matching criteria.";
-      } else {
-        // Limit to avoid token limits, maybe top 20?
-        final limitedList = relevantExpenses.take(50).toList();
-        summary += limitedList.toString();
-      }
-
-      final response = await _geminiService.generateResponse(text, summary);
-      _addMessage(Message(text: response, isUser: false));
-    } catch (e) {
-      _addMessage(
-        Message(text: "Sorry, I ran into an error: $e", isUser: false),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) => _ask(widget.initialQuery!));
     }
   }
 
   @override
+  void dispose() {
+    _input.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scrollToEnd() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
+  }
+
+  Future<void> _ask(String text) async {
+    final question = text.trim();
+    if (question.isEmpty || _busy) return;
+    final repo = context.repo;
+    _input.clear();
+    setState(() {
+      _messages.add(_Message(question, true));
+      _busy = true;
+    });
+    _scrollToEnd();
+
+    String reply;
+    try {
+      final categories = await repo.watchCategories().first;
+      final q = await _gemini.parseQuery(question, categories: categories);
+      final now = DateTime.now();
+      final start = q.start ?? now.subtract(const Duration(days: 90));
+      final end = q.end ?? now;
+      final rows = (await repo.fetchExpenses(
+        from: DateTime(start.year, start.month, start.day),
+        to: DateTime(end.year, end.month, end.day + 1),
+      )).where((e) {
+        if (q.category != null && e.category != q.category) return false;
+        if (q.paymentMethod != null && e.paymentMethod != q.paymentMethod) return false;
+        return true;
+      }).toList();
+
+      final total = rows.fold<double>(0, (s, e) => s + e.amount);
+      final fmt = DateFormat('yyyy-MM-dd');
+      final summary = StringBuffer(
+        'Period ${fmt.format(start)} to ${fmt.format(end)}'
+        '${q.category != null ? ', category ${q.category}' : ''}'
+        '${q.paymentMethod != null ? ', paid by ${q.paymentMethod}' : ''}.\n'
+        '${rows.length} expenses, total ${Money.format(total)}.\n',
+      );
+      // Largest first, so the most relevant rows survive the cap.
+      rows.sort((a, b) => b.amount.compareTo(a.amount));
+      for (final e in rows.take(80)) {
+        summary.writeln(
+          '${fmt.format(e.date)} | ${e.title} | ${Money.format(e.amount)} | ${e.category} | ${e.paymentMethod} | ${e.place}',
+        );
+      }
+      reply = await _gemini.answer(question, rows.isEmpty ? 'No matching expenses.' : summary.toString());
+    } catch (e) {
+      reply = e is GeminiNotConfigured
+          ? e.toString()
+          : "Sorry, I couldn't answer that right now. ($e)";
+    }
+    if (!mounted) return;
+    setState(() {
+      _messages.add(_Message(reply, false));
+      _busy = false;
+    });
+    _scrollToEnd();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('AI Financial Assistant'),
+        title: const Text('Ask about spending'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              setState(() {
-                _messages.clear();
-                _messages.add(
-                  Message(
-                    text:
-                        "Hi! I'm your AI Financial Assistant. 🤖\nAsk me things like:\n\n• \"How much did I spend on food this month?\"\n• \"What are my biggest expenses?\"\n• \"Did I spend more on transport or shopping?\"",
-                    isUser: false,
-                  ),
-                );
-              });
-            },
-          ),
+          if (_messages.isNotEmpty)
+            IconButton(
+              tooltip: 'Start over',
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: _busy ? null : () => setState(_messages.clear),
+            ),
         ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                return _MessageBubble(message: _messages[index]);
-              },
-            ),
-          ),
-          if (_isLoading)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Column(
-                children: [
-                  LinearProgressIndicator(
-                    backgroundColor: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.1),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      Theme.of(context).colorScheme.primary,
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ),
-            ),
-          Container(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              8,
-              16,
-              MediaQuery.of(context).padding.bottom + 16,
-            ),
-            decoration: BoxDecoration(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -5),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFF1E293B)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+            child: _messages.isEmpty
+                ? ListView(
+                    padding: const EdgeInsets.all(20),
+                    children: [
+                      Text('Ask in your own words.', style: theme.textTheme.titleLarge),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Answers come only from expenses you have logged.',
+                        style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
                       ),
-                    ),
-                    child: TextField(
-                      controller: _controller,
-                      textCapitalization: TextCapitalization.sentences,
-                      onSubmitted: _handleSubmitted,
-                      decoration: const InputDecoration(
-                        hintText: 'Ask about your expenses...',
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        filled: false,
-                        contentPadding: EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  radius: 24,
-                  child: IconButton(
-                    icon: const Icon(Icons.send_rounded, color: Colors.white),
-                    onPressed: () => _handleSubmitted(_controller.text),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class Message {
-  final String text;
-  final bool isUser;
-  Message({required this.text, required this.isUser});
-}
-
-class _MessageBubble extends StatelessWidget {
-  final Message message;
-
-  const _MessageBubble({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: message.isUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (!message.isUser) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              child: Icon(
-                Icons.smart_toy_outlined,
-                size: 18,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: message.isUser
-                    ? Theme.of(context).colorScheme.primary
-                    : isDark
-                    ? const Color(0xFF1F2937)
-                    : Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(message.isUser ? 20 : 4),
-                  bottomRight: Radius.circular(message.isUser ? 4 : 20),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 5,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-                border: message.isUser
-                    ? null
-                    : Border.all(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.1)
-                            : Colors.grey.withValues(alpha: 0.1),
-                      ),
-              ),
-              child: message.isUser
-                  ? Text(
-                      message.text,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        height: 1.3,
-                      ),
-                    )
-                  : MarkdownBody(
-                      data: message.text,
-                      styleSheet:
-                          MarkdownStyleSheet.fromTheme(
-                            Theme.of(context),
-                          ).copyWith(
-                            p: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontSize: 15,
-                              height: 1.4,
-                              color: Theme.of(context).colorScheme.onSurface,
+                      const SizedBox(height: 20),
+                      for (final s in _suggestions)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: ActionChip(
+                            label: Text(s),
+                            onPressed: () => _ask(s),
+                          ),
+                        ),
+                    ],
+                  )
+                : ListView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    itemCount: _messages.length + (_busy ? 1 : 0),
+                    itemBuilder: (context, i) {
+                      if (i == _messages.length) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: SizedBox.square(dimension: 24, child: CircularProgressIndicator(strokeWidth: 2.5)),
+                          ),
+                        );
+                      }
+                      final m = _messages[i];
+                      return Align(
+                        alignment: m.fromUser ? Alignment.centerRight : Alignment.centerLeft,
+                        child: Container(
+                          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.82),
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: m.fromUser ? scheme.primary : scheme.surfaceContainerLowest,
+                            borderRadius: BorderRadius.circular(16).copyWith(
+                              bottomRight: m.fromUser ? const Radius.circular(4) : null,
+                              bottomLeft: m.fromUser ? null : const Radius.circular(4),
                             ),
                           ),
+                          child: m.fromUser
+                              ? Text(m.text, style: theme.textTheme.bodyLarge?.copyWith(color: scheme.onPrimary))
+                              : MarkdownBody(
+                                  data: m.text,
+                                  styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+                                    p: theme.textTheme.bodyLarge?.copyWith(height: 1.4),
+                                  ),
+                                ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _input,
+                      enabled: !_busy,
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: _ask,
+                      decoration: const InputDecoration(hintText: 'e.g. Groceries in September'),
                     ),
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton.filled(
+                    tooltip: 'Send',
+                    onPressed: _busy ? null : () => _ask(_input.text),
+                    icon: const Icon(Icons.arrow_upward_rounded),
+                  ),
+                ],
+              ),
             ),
           ),
-          if (message.isUser) const SizedBox(width: 8),
         ],
       ),
     );

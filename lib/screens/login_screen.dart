@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/feedback_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common.dart';
+import '../widgets/tingkat_mark.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -86,43 +87,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// The app mark: three stacked enamel tiers with a handle, drawn as plain
-/// geometry.
-class TingkatMark extends StatelessWidget {
-  final double size;
-  const TingkatMark({super.key, this.size = 72});
-
-  @override
-  Widget build(BuildContext context) {
-    final e = Enamel.light;
-    final tier = size * 0.26;
-    Widget band(Color c) => Container(
-      height: tier,
-      margin: EdgeInsets.only(top: size * 0.04),
-      decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(tier * 0.35)),
-    );
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Column(
-        children: [
-          Container(
-            width: size * 0.4,
-            height: size * 0.12,
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFF2C14E), width: size * 0.04),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(size * 0.2)),
-            ),
-          ),
-          band(const Color(0xFFF2C14E)),
-          band(e.coral),
-          band(const Color(0xFFFFFFFF)),
-        ],
       ),
     );
   }

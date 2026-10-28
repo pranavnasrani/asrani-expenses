@@ -8,7 +8,7 @@ class GeminiService {
   late final GenerativeModel _model;
 
   GeminiService() {
-    _model = GenerativeModel(model: 'gemma-3-27b-it', apiKey: _apiKey);
+    _model = GenerativeModel(model: 'gemini-3.1-flash-lite', apiKey: _apiKey);
   }
 
   /// Analyzes a receipt image and extracts expense details

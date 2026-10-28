@@ -48,7 +48,7 @@ class _InsightsWidgetState extends State<InsightsWidget>
       if (snapshot.docs.isEmpty) {
         if (mounted) {
           setState(() {
-            _insight = "Start tracking expenses to get AI insights! 📊";
+            _insight = "Start tracking expenses for analytical insights.";
             _isLoading = false;
           });
           _animationController.forward();
@@ -106,7 +106,7 @@ class _InsightsWidgetState extends State<InsightsWidget>
     } catch (e) {
       if (mounted) {
         setState(() {
-          _insight = "Your weekly spending looks healthy! Keep it up! 💪";
+          _insight = "Your weekly spending looks healthy! Keep it up!";
           _isLoading = false;
         });
         _animationController.forward();
@@ -152,7 +152,7 @@ class _InsightsWidgetState extends State<InsightsWidget>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(

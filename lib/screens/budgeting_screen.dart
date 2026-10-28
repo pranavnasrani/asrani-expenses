@@ -486,7 +486,7 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
         borderRadius: BorderRadius.circular(24),
         boxShadow: isDark ? [] : [
           BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -510,7 +510,7 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: progressColor.withOpacity(0.1),
+                  color: progressColor.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -526,7 +526,7 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
             borderRadius: BorderRadius.circular(8),
             child: LinearProgressIndicator(
               value: budget > 0 ? (spent / budget).clamp(0.0, 1.0) : 0,
-              backgroundColor: color.withOpacity(0.1),
+              backgroundColor: color.withValues(alpha: 0.1),
               color: progressColor,
               minHeight: 12,
             ),
@@ -536,7 +536,7 @@ class _SpendingBreakdownScreenState extends State<SpendingBreakdownScreen> {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
             decoration: BoxDecoration(
-              color: (balance >= 0 ? Colors.green : Colors.red).withOpacity(0.1),
+              color: (balance >= 0 ? Colors.green : Colors.red).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(

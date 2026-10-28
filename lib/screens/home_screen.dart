@@ -84,7 +84,7 @@ class HomeScreen extends StatelessWidget {
         ),
         CircleAvatar(
           radius: 28,
-          backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+          backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
           child: Text(
             (user?.displayName ?? user?.email ?? 'U').toUpperCase().substring(0, 1),
             style: TextStyle(
@@ -295,7 +295,7 @@ class HomeScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: isDark ? [] : [
                   BoxShadow(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
                     blurRadius: 24,
                     offset: const Offset(0, 8),
                   ),
@@ -369,7 +369,7 @@ class HomeScreen extends StatelessWidget {
                                 color: index == 6
                                     ? null
                                     : Theme.of(context).colorScheme.primary
-                                          .withOpacity(0.15),
+                                          .withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
@@ -492,7 +492,7 @@ class HomeScreen extends StatelessWidget {
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
-                side: BorderSide(color: Colors.grey.withOpacity(0.1)),
+                side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
               ),
               child: ListView.separated(
                 shrinkWrap: true,
@@ -500,7 +500,7 @@ class HomeScreen extends StatelessWidget {
                 itemCount: snapshot.data!.docs.length,
                 separatorBuilder: (context, index) => Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Divider(color: Colors.grey.withOpacity(0.1), height: 1),
+                  child: Divider(color: Colors.grey.withValues(alpha: 0.1), height: 1),
                 ),
                 itemBuilder: (context, index) {
                   final doc = snapshot.data!.docs[index];
@@ -533,7 +533,7 @@ class HomeScreen extends StatelessWidget {
                     leading: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: CategoryUtils.getColorForCategory(category).withOpacity(0.15),
+                        color: CategoryUtils.getColorForCategory(category).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Icon(

@@ -56,11 +56,11 @@ class AppTheme {
       ),
       bodyLarge: GoogleFonts.inter(
         fontSize: 16,
-        color: textColor.withOpacity(0.85),
+        color: textColor.withValues(alpha: 0.85),
       ),
       bodyMedium: GoogleFonts.inter(
         fontSize: 14,
-        color: textColor.withOpacity(0.75),
+        color: textColor.withValues(alpha: 0.75),
       ),
       labelLarge: GoogleFonts.inter(
         fontSize: 14,
@@ -73,7 +73,7 @@ class AppTheme {
   // Soft Shadow for Light Mode
   static List<BoxShadow> get lightShadow => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.04),
+          color: Colors.black.withValues(alpha: 0.04),
           blurRadius: 24,
           offset: const Offset(0, 8),
         ),
@@ -82,7 +82,7 @@ class AppTheme {
   // Soft Shadow for Dark Mode
   static List<BoxShadow> get darkShadow => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.25),
+          color: Colors.black.withValues(alpha: 0.25),
           blurRadius: 24,
           offset: const Offset(0, 8),
         ),

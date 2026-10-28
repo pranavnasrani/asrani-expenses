@@ -128,6 +128,7 @@ class _AddScreenState extends State<AddScreen> {
           'Entertainment',
           'Bills',
           'Other',
+          'Groceries',
         ];
         await FirebaseFirestore.instance
             .collection('users')
@@ -589,14 +590,16 @@ class _AddScreenState extends State<AddScreen> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Theme.of(context).colorScheme.primary.withOpacity(0.1),
-            Theme.of(context).colorScheme.secondary.withOpacity(0.05),
+            Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+            Theme.of(context).colorScheme.secondary.withValues(alpha: 0.05),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+        ),
       ),
       child: InkWell(
         onTap: _showScanOptions,
@@ -644,7 +647,10 @@ class _AddScreenState extends State<AddScreen> {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.primary),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
             ],
           ),
         ),

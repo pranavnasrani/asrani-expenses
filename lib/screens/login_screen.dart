@@ -142,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen>
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(32),
                       child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                         child: Container(
                           padding: const EdgeInsets.all(32.0),
                           decoration: BoxDecoration(
@@ -217,35 +217,20 @@ class _LoginScreenState extends State<LoginScreen>
                               ),
                               const SizedBox(height: 12),
 
-                              // Subtitle with icon
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.auto_awesome,
-                                    size: 16,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    child: Text(
-                                      'AI-powered expense tracking',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: isDark
-                                                ? Colors.white70
-                                                : Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                          ),
-                                      textAlign: TextAlign.center,
+                              // Subtitle
+                              Text(
+                                'Track, analyze, and export your expenses',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: isDark
+                                          ? Colors.white70
+                                          : Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
                                     ),
-                                  ),
-                                ],
+                                textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 40),
 
